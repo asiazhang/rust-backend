@@ -1,11 +1,7 @@
-use crate::routes::projects::{
-    create_project, delete_project, find_projects, get_project, update_project,
-};
 use crate::routes::routers;
-use crate::routes::users::{create_user, delete_user, find_users, get_user, update_user};
 use anyhow::Result;
-use tracing::info;
-use utoipa::OpenApi;
+use tracing::{debug, info};
+use utoipa::{Modify, OpenApi};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_scalar::{Scalar, Servable};
 
@@ -14,20 +10,30 @@ mod routes;
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
+        .with_max_level(tracing::Level::DEBUG)
         .init();
 
     #[derive(OpenApi)]
     #[openapi(
-        modifiers(),
+        modifiers(&AutoImportModify),
         tags(
             (name = "rust-backend", description = "Rust backend sample")
-        )
+        ),
     )]
     struct ApiDoc;
+    struct AutoImportModify;
+
+    impl Modify for AutoImportModify {
+        fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+            // 这里可以添加自定义的 OpenAPI 配置
+        }
+    }
+
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
-        .nest("api/v1", routers())
+        .nest("/api/v1", routers())
         .split_for_parts();
+
+    debug!("openapi: {}", api.to_pretty_json()?);
 
     let router = router.merge(Scalar::with_url("/docs", api));
 

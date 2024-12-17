@@ -1,22 +1,17 @@
 /// Search Projects by query params.
 ///
 /// Search `Project` by query params and return matching `Project`.
-#[utoipa::path(
-    get,
-    path = "/projects",
-    tag = "project",
-    params(
-    ),
-    responses(
-            (status = 200, description = "List matching projects by query", body = [String])
-    )
-)]
+#[utoipa::path(post, path = "/search-projects")]
 pub async fn find_projects() {}
 
+#[utoipa::path(post, path = "/projects")]
 pub async fn create_project() {}
 
+#[utoipa::path(get, path = "/projects/{id}")]
 pub async fn get_project() {}
 
+#[utoipa::path(patch, path = "/projects/{id}")]
 pub async fn update_project() {}
 
+#[utoipa::path(delete, path = "/projects/{id}")]
 pub async fn delete_project() {}
