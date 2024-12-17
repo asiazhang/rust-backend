@@ -4,9 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.94"
 axum = "0.7.9"
+diesel = { version = "2.2.6", features = ["postgres", "serde_json"] }
+dotenvy = "0.15.7"
 serde = { version = "1.0.216", features = ["derive"] }
 serde_json = "1.0.133"
 tokio = { version = "1.42.0", features = ["full"] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
+utoipa = { version = "5.2.0", features = ["axum_extras", "openapi_extensions", "time"] }
+utoipa-axum = "0.1.2"
+utoipa-scalar = { version = "0.2.0", features = ["axum"] }
