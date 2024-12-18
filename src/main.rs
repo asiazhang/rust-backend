@@ -1,11 +1,13 @@
 use crate::routes::routers;
 use anyhow::Result;
-use tracing::{debug, info};
-use utoipa::{Modify, OpenApi};
+use tracing::info;
+use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_scalar::{Scalar, Servable};
 
 mod routes;
+
+mod models;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -15,25 +17,21 @@ async fn main() -> Result<()> {
 
     #[derive(OpenApi)]
     #[openapi(
-        modifiers(&AutoImportModify),
         tags(
-            (name = "rust-backend", description = "Rust backend sample")
+            (name = "rust-backend", description = r#"
+Rust后端例子，覆盖场景：
+
+- API后端
+- 异步处理后端(Redis)
+- OpenAPI文档
+            "#)
         ),
     )]
     struct ApiDoc;
-    struct AutoImportModify;
-
-    impl Modify for AutoImportModify {
-        fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-            // 这里可以添加自定义的 OpenAPI 配置
-        }
-    }
 
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .nest("/api/v1", routers())
         .split_for_parts();
-
-    debug!("openapi: {}", api.to_pretty_json()?);
 
     let router = router.merge(Scalar::with_url("/docs", api));
 
