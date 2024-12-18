@@ -42,7 +42,7 @@ pub async fn create_project(Json(project): Json<ProjectCreate>) -> Json<Reply<Pr
     Json(Reply {
         data: ProjectInfo {
             id: 1,
-            name: project.project_name,
+            project_name: project.project_name,
         },
     })
 }

@@ -27,5 +27,5 @@ pub struct ProjectInfo {
 
     #[schema(example="bar")]
     /// 项目名称
-    pub name: String,
+    pub project_name: String,
 }
