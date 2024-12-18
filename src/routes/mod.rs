@@ -1,3 +1,4 @@
+use crate::models::app::AppState;
 use crate::routes::projects::__path_create_project;
 use crate::routes::projects::__path_delete_project;
 use crate::routes::projects::__path_find_projects;
@@ -12,6 +13,7 @@ use crate::routes::users::__path_find_users;
 use crate::routes::users::__path_get_user;
 use crate::routes::users::__path_update_user;
 use crate::routes::users::{create_user, delete_user, find_users, get_user, update_user};
+use std::sync::Arc;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -19,7 +21,7 @@ pub mod users;
 
 pub mod projects;
 
-pub(super) fn routers() -> OpenApiRouter {
+pub(super) fn routers(state: Arc<AppState>) -> OpenApiRouter {
     OpenApiRouter::new()
         .routes(routes!(find_projects))
         .routes(routes!(
@@ -30,4 +32,5 @@ pub(super) fn routers() -> OpenApiRouter {
         ))
         .routes(routes!(find_users))
         .routes(routes!(get_user, create_user, update_user, delete_user))
+        .with_state(state)
 }

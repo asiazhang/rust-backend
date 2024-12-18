@@ -1,5 +1,8 @@
 use crate::routes::routers;
-use anyhow::Result;
+use anyhow::{Context, Result};
+use std::sync::Arc;
+
+use crate::models::app::AppState;
 use tracing::info;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
@@ -14,6 +17,19 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
         .init();
+
+    dotenvy::dotenv()?;
+
+    let db_url =
+        std::env::var("DATABASE_URL").context("Can not load DATABASE_URL in environment")?;
+
+    let pool = sqlx::PgPool::connect(&db_url)
+        .await
+        .context("Connect to postgresql database")?;
+
+    let shared_state = Arc::new(AppState {
+        db_pool: pool,
+    });
 
     #[derive(OpenApi)]
     #[openapi(
@@ -30,10 +46,11 @@ Rust后端例子，覆盖场景：
     struct ApiDoc;
 
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
-        .nest("/api/v1", routers())
+        .nest("/api/v1", routers(shared_state))
         .split_for_parts();
 
-    let router = router.merge(Scalar::with_url("/docs", api));
+    let router = router
+        .merge(Scalar::with_url("/docs", api));
 
     let bind_addr = "0.0.0.0:8080";
     info!("Starting server on {}", bind_addr);

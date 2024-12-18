@@ -23,7 +23,7 @@ pub struct ProjectCreate {
 pub struct ProjectInfo {
     #[schema(example=15)]
     /// 项目ID
-    pub id: u32,
+    pub id: i32,
 
     #[schema(example="bar")]
     /// 项目名称
