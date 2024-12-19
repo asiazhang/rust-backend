@@ -4,7 +4,7 @@ use utoipa::ToSchema;
 
 #[derive(Deserialize, Debug, ToSchema)]
 pub struct ProjectSearch {
-    #[schema(example="foo")]
+    #[schema(example = "foo")]
     /// 查询的项目名称（模糊搜索）
     pub project_name: Option<String>,
 
@@ -14,18 +14,18 @@ pub struct ProjectSearch {
 
 #[derive(Deserialize, Debug, ToSchema)]
 pub struct ProjectCreate {
-    #[schema(example="foo")]
+    #[schema(example = "foo")]
     /// 新建项目名称
-    pub project_name: String
+    pub project_name: String,
 }
 
 #[derive(Deserialize, Debug, ToSchema, Serialize)]
 pub struct ProjectInfo {
-    #[schema(example=15)]
+    #[schema(example = 15)]
     /// 项目ID
     pub id: i32,
 
-    #[schema(example="bar")]
+    #[schema(example = "bar")]
     /// 项目名称
     pub project_name: String,
 }

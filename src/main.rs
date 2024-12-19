@@ -64,12 +64,12 @@ async fn main() -> Result<()> {
 }
 
 /// 创建当前App的路由
-/// 
+///
 /// 完成以下功能：
 /// - 生成OpenAPI文档
 /// - 生成App路由
 /// - 使用Scalar作为最终在线文档格式
-/// 
+///
 /// 由于使用了 `utoipa` 库来自动化生成openapi文档，因此我们没有使用原生的 [`axum::Router`]，而是使用了
 /// [`utoipa_axum::router::OpenApiRouter`] 。
 fn create_app_router(shared_state: Arc<AppState>) -> Router {

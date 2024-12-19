@@ -1,5 +1,5 @@
 //! 项目相关接口
-//! 
+//!
 
 use crate::models::app::AppState;
 use crate::models::common::Reply;
@@ -23,6 +23,7 @@ use tracing::debug;
         (status = 200, description = "Search results", body = ReplyList<ProjectInfo>)
     ),
 )]
+#[axum::debug_handler]
 pub async fn find_projects(
     State(state): State<Arc<AppState>>,
     Json(search): Json<ProjectSearch>,
@@ -55,7 +56,7 @@ FROM filtered_projects;
     .fetch_all(&state.db_pool)
     .await?;
 
-    let total = rows.first().and_then(|r| r.total_count).unwrap_or( 0) as u32;
+    let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u32;
     let projects = rows
         .into_iter()
         .map(|r| ProjectInfo {
