@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\ninsert into hm.projects (project_name)\nvalues ($1)\nreturning id, project_name;\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "project_name",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "7c71e3914021ffd6c33ffa0d029b4a598452e43750fe262c39dac96f392b8788"
+}
