@@ -10,7 +10,7 @@ use validator::ValidationErrors;
 #[derive(Error, Debug)]
 pub enum AppError {
     #[error(transparent)]
-    ValidationError(#[from] ValidationErrors),
+    ValidationFailed(#[from] ValidationErrors),
 
     #[error(transparent)]
     DatabaseError(#[from] sqlx::Error),
@@ -23,7 +23,7 @@ pub enum AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         match self {
-            AppError::ValidationError(err) => {
+            AppError::ValidationFailed(err) => {
                 (StatusCode::BAD_REQUEST, format!("Validate failed: {}", err)).into_response()
             }
             AppError::DatabaseError(err) => {

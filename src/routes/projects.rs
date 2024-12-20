@@ -41,6 +41,31 @@ use validator::Validate;
 /// 4. [`ProjectInfo`] 是实际的业务返回对象
 /// 5. [`AppError`] 是错误时返回的Error类型，会自动转换为500错误信息
 ///
+/// ## SQLx
+///
+/// 这里通过sqlx来组装sql查询语句，特点如下：
+///
+/// ### 静态宏检查
+/// [`sqlx::query`]宏会在编译期会对sql语句进行检查（发送到数据库），确保sql的有效性。
+///
+/// ### 分页查询
+/// 通过`COUNT(*) OVER () as total_count` + `WITH` 语法，可以一次性将数据和总数都查询出来，很方便。
+///
+/// ### 条件查询
+/// 在以往我们经常会遇到这种场景：用户如果传入A，则进行过滤，否则不过滤，比如模糊搜索：
+///
+/// 在postgres中可以这样实现:
+///
+/// ```
+/// WHERE (COALESCE($1, '') = '' OR project_name LIKE $2)
+/// ```
+///
+/// $1和$2基本上是一个值。生成的查询语句如下：
+///
+/// - 如果是None，那么会展开为：`WHERE '' = '' OR project_name LIKE %%`，这个会被简化为真值，直接被查询引擎优化掉
+/// - 如果是字符串A，那么会展开为: `WHERE 'A' = '' OR project_name LIKE %A%`，这个会被简化为`WHERE project_name LIKE %A%`
+///
+/// 所以我们不用再像其他框架里面使用`if`来拼接了！
 #[utoipa::path(post,
     path = "/search-projects",
     tag = "projects",
@@ -59,8 +84,13 @@ pub async fn find_projects(
     // 验证输入参数，确保有效性
     search.validate()?;
 
+    // 这里name需要clone一次，因为后面会使用两次name，导致重复消费
     let name = search.project_name.clone();
+
+    // saturating_sub(1)会保证结果>=0，不会出现溢出
     let offset = (search.page_query.page_index.saturating_sub(1)) * search.page_query.page_size;
+
+    // 具体sqlx的好处可以参考上面的注释
     let rows = sqlx::query!(
         r#"
 WITH filtered_projects AS (SELECT id,
@@ -83,16 +113,17 @@ FROM filtered_projects;
         offset as i64,
     )
     .fetch_all(&state.db_pool)
-    .await?;
+    .await?; // 异步操作需要使用.await，?会将错误直接传播到上层，转换为http错误
 
+    // 获取总数和分页数据
     let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u32;
     let projects = rows
-        .into_iter()
+        .into_iter() // 转换为迭代器
         .map(|r| ProjectInfo {
             id: r.id,
             project_name: r.project_name,
-        })
-        .collect();
+        }) // 使用map将数据库row对象转换为ProjectInfo对象
+        .collect(); // 转换为Vec
 
     Ok(Json(ReplyList {
         total,

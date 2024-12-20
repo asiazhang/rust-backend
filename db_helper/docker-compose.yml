@@ -2,7 +2,7 @@ version: '3'
 
 services:
   postgresql:
-    image: 'bitnami/postgresql:latest'
+    image: 'bitnami/postgresql'
     environment:
       POSTGRESQL_PASSWORD: o46UyptJsJNxqr
     ports:

@@ -49,7 +49,6 @@ pub mod users;
 /// .routes!(get)
 /// ```
 ///
-
 pub(super) fn routers(state: Arc<AppState>) -> OpenApiRouter {
     OpenApiRouter::new()
         .routes(routes!(find_projects))
