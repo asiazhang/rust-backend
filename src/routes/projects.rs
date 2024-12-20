@@ -11,6 +11,7 @@ use axum::extract::State;
 use axum::Json;
 use std::sync::Arc;
 use tracing::debug;
+use validator::Validate;
 
 /// 根据查询参数搜索项目
 ///
@@ -54,7 +55,10 @@ pub async fn find_projects(
     Json(search): Json<ProjectSearch>,
 ) -> Result<Json<ReplyList<ProjectInfo>>, AppError> {
     debug!("Searching projects {:#?}", search);
-    
+
+    // 验证输入参数，确保有效性
+    search.validate()?;
+
     let name = search.project_name.clone();
     let offset = (search.page_query.page_index.saturating_sub(1)) * search.page_query.page_size;
     let rows = sqlx::query!(

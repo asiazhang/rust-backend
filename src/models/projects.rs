@@ -3,13 +3,15 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
 
-#[derive(Deserialize, Debug, ToSchema)]
+#[derive(Deserialize, Debug, ToSchema, Validate)]
 pub struct ProjectSearch {
     #[schema(example = "foo")]
+    #[validate(length(min = 1, max = 100))]
     /// 查询的项目名称（模糊搜索）
     pub project_name: Option<String>,
 
     /// 查询分页信息
+    #[validate(nested)]
     pub page_query: PageQuery,
 }
 

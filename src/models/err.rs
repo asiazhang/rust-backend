@@ -2,28 +2,38 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use thiserror::Error;
+use validator::ValidationErrors;
 
-// Make our own error that wraps `anyhow::Error`.
-pub struct AppError(anyhow::Error);
+/// 使用 [`thiserror`] 定义错误类型
+/// 方便根据类型转换为相应的http错误码
+#[derive(Error, Debug)]
+pub enum AppError {
+    #[error(transparent)]
+    ValidationError(#[from] ValidationErrors),
 
-// Tell axum how to convert `AppError` into a response.
-impl IntoResponse for AppError {
-    fn into_response(self) -> Response {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Something went wrong: {}", self.0),
-        )
-            .into_response()
-    }
+    #[error(transparent)]
+    DatabaseError(#[from] sqlx::Error),
+
+    #[error(transparent)]
+    InternalError(#[from] anyhow::Error),
 }
 
-// This enables using `?` on functions that return `Result<_, anyhow::Error>` to turn them into
-// `Result<_, AppError>`. That way you don't need to do that manually.
-impl<E> From<E> for AppError
-where
-    E: Into<anyhow::Error>,
-{
-    fn from(err: E) -> Self {
-        Self(err.into())
+/// Tell axum how to convert `AppError` into a response.
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        match self {
+            AppError::ValidationError(err) => {
+                (StatusCode::BAD_REQUEST, format!("Validate failed: {}", err)).into_response()
+            }
+            AppError::DatabaseError(err) => {
+                (StatusCode::BAD_REQUEST, format!("Database error: {}", err)).into_response()
+            }
+            AppError::InternalError(err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Something went wrong: {}", err),
+            )
+                .into_response(),
+        }
     }
 }
