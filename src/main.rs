@@ -70,7 +70,7 @@ async fn main() -> Result<()> {
 /// - 生成App路由
 /// - 使用Scalar作为最终在线文档格式
 ///
-/// 由于使用了 `utoipa` 库来自动化生成openapi文档，因此我们没有使用原生的 [`Router`]，而是使用了
+/// 由于使用了 `utoipa` 库来自动化生成`openapi`文档，因此我们没有使用原生的 [`Router`]，而是使用了
 /// [`OpenApiRouter`] 。
 fn create_app_router(shared_state: Arc<AppState>) -> Router {
     // 当前项目的OpenAPI声明
@@ -96,6 +96,7 @@ Rust后端例子，覆盖场景：
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .nest("/api/v1", routers(shared_state))
         .split_for_parts();
-
+    
+    // 合并文档路由，用户可通过 /docs 访问文档网页地址
     router.merge(Scalar::with_url("/docs", api))
 }

@@ -1,6 +1,7 @@
 use crate::models::common::PageQuery;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use validator::Validate;
 
 #[derive(Deserialize, Debug, ToSchema)]
 pub struct ProjectSearch {

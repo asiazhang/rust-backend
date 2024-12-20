@@ -1,13 +1,16 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use validator::Validate;
 
-#[derive(Deserialize, Debug, ToSchema)]
+#[derive(Deserialize, Debug, ToSchema, Validate)]
 pub struct PageQuery {
     #[schema(example = 1)]
+    #[validate(range(min = 1))]
     /// 分页查询的开始页数
     pub page_index: u32,
 
     #[schema(example = 20)]
+    #[validate(range(min = 1, max = 100))]
     /// 分页查询的每页大小
     pub page_size: u32,
 }
