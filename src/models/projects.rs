@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
 
+/// 搜索项目列表信息
+///
+/// - `project_name`为可选参数
 #[derive(Deserialize, Debug, ToSchema, Validate)]
 pub struct ProjectSearch {
     #[schema(example = "foo")]

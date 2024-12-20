@@ -9,12 +9,15 @@ use validator::ValidationErrors;
 /// 方便根据类型转换为相应的http错误码
 #[derive(Error, Debug)]
 pub enum AppError {
+    /// 数据验证错误，这种错误通常都是用户参数不正确导致的，所以需要转换为403
     #[error(transparent)]
     ValidationFailed(#[from] ValidationErrors),
 
+    /// 数据库错误
     #[error(transparent)]
     DatabaseError(#[from] sqlx::Error),
 
+    /// 其他类型错误
     #[error(transparent)]
     InternalError(#[from] anyhow::Error),
 }
@@ -27,7 +30,7 @@ impl IntoResponse for AppError {
                 (StatusCode::BAD_REQUEST, format!("Validate failed: {}", err)).into_response()
             }
             AppError::DatabaseError(err) => {
-                (StatusCode::BAD_REQUEST, format!("Database error: {}", err)).into_response()
+                (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", err)).into_response()
             }
             AppError::InternalError(err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,

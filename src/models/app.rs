@@ -8,5 +8,7 @@ use sqlx::PgPool;
 /// 
 /// 
 pub struct AppState {
+
+    /// Postgres数据库连接池
     pub db_pool: PgPool,
 }

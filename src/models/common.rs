@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
 
+/// 分页查询信息
 #[derive(Deserialize, Debug, ToSchema, Validate)]
 pub struct PageQuery {
     #[schema(example = 1)]
@@ -15,11 +16,15 @@ pub struct PageQuery {
     pub page_size: u32,
 }
 
+/// 封装符合json-api的单个返回对象
+///
+/// 具体参考：https://jsonapi.org
 #[derive(Deserialize, Debug, ToSchema, Serialize)]
 pub struct Reply<T> {
     pub data: T,
 }
 
+/// 封装符合json-api的列表对象
 #[derive(Deserialize, Debug, ToSchema, Serialize)]
 pub struct ReplyList<T> {
     pub data: Vec<T>,

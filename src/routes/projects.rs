@@ -150,6 +150,7 @@ pub async fn create_project(
 ) -> Result<Json<Reply<ProjectInfo>>, AppError> {
     debug!("Creating project {:#?}", project);
 
+    // query_as!可以直接讲结果对象转换为类型对象
     let project = sqlx::query_as!(
         ProjectInfo,
         r#"
