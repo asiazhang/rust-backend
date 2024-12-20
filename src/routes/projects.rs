@@ -118,13 +118,14 @@ FROM filtered_projects;
     // 获取总数和分页数据
     let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u32;
     let projects = rows
-        .into_iter() // 转换为迭代器
+        .into_iter() // Vec<Record>转换为迭代器
         .map(|r| ProjectInfo {
             id: r.id,
             project_name: r.project_name,
-        }) // 使用map将数据库row对象转换为ProjectInfo对象
-        .collect(); // 转换为Vec
+        }) // 使用map将数据库Record对象转换为ProjectInfo对象
+        .collect(); // 转换回Vec
 
+    // 使用OK返回成功的结果
     Ok(Json(ReplyList {
         total,
         data: projects,
@@ -150,7 +151,7 @@ pub async fn create_project(
 ) -> Result<Json<Reply<ProjectInfo>>, AppError> {
     debug!("Creating project {:#?}", project);
 
-    // query_as!可以直接讲结果对象转换为类型对象
+    // query_as!可以直接将Record结果对象转换为类型对象
     let project = sqlx::query_as!(
         ProjectInfo,
         r#"
