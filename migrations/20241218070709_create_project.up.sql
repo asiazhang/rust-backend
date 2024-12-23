@@ -4,7 +4,12 @@ create schema if not exists hm;
 create table hm.projects
 (
     id           serial primary key not null,
-    project_name varchar(255)       not null
+    -- 项目名称
+    project_name varchar(255)       not null,
+    -- 项目注释信息
+    comment      varchar(255)       not null,
+    created_at   timestamp          not null,
+    updated_at    timestamp          not null
 );
 
 create extension if not exists pg_trgm;

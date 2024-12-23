@@ -20,8 +20,9 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_scalar::{Scalar, Servable};
 
 mod routes;
-
 mod models;
+mod tasks;
+mod crons; 
 
 /// 入口函数
 ///

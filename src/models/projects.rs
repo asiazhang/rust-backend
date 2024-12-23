@@ -20,9 +20,13 @@ pub struct ProjectSearch {
 
 #[derive(Deserialize, Debug, ToSchema)]
 pub struct ProjectCreate {
-    #[schema(example = "foo")]
     /// 新建项目名称
+    #[schema(example = "foo")]
     pub project_name: String,
+
+    /// 项目说明
+    #[schema(example = "comment")]
+    pub comment: String,
 }
 
 #[derive(Deserialize, Debug, ToSchema, Serialize)]
@@ -34,4 +38,18 @@ pub struct ProjectInfo {
     #[schema(example = "bar")]
     /// 项目名称
     pub project_name: String,
+
+    /// 项目说明
+    #[schema(example = "foo_bar")]
+    pub comment: String,
+}
+
+/// 更新项目的信息
+#[derive(Deserialize, Debug, ToSchema, Serialize)]
+pub struct ProjectUpdate {
+    #[schema(example = "bar")]
+    pub project_name: Option<String>,
+
+    #[schema(example = "foo")]
+    pub comment: Option<String>,
 }

@@ -29,9 +29,18 @@ impl IntoResponse for AppError {
             AppError::ValidationFailed(err) => {
                 (StatusCode::BAD_REQUEST, format!("Validate failed: {}", err)).into_response()
             }
-            AppError::DatabaseError(err) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", err)).into_response()
-            }
+            AppError::DatabaseError(err) => match err {
+                sqlx::Error::RowNotFound => (
+                    StatusCode::NOT_FOUND,
+                    format!("Can not found resource: {}", err),
+                )
+                    .into_response(),
+                _ => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Database error: {}", err),
+                )
+                    .into_response(),
+            },
             AppError::InternalError(err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Something went wrong: {}", err),

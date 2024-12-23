@@ -14,3 +14,4 @@
 - [tracing](https://github.com/tokio-rs/tracing): 日志框架
 - [dotenvy](https://github.com/allan2/dotenvy): 本地.env文件环境变量化支持
 - [anyhow](https://github.com/dtolnay/anyhow): 错误处理支持
+- [validator](https://github.com/Keats/validator): 模型校验器 

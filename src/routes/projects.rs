@@ -5,9 +5,9 @@ use crate::models::app::AppState;
 use crate::models::common::Reply;
 use crate::models::common::ReplyList;
 use crate::models::err::AppError;
-use crate::models::projects::{ProjectCreate, ProjectInfo, ProjectSearch};
+use crate::models::projects::{ProjectCreate, ProjectInfo, ProjectSearch, ProjectUpdate};
 use anyhow::Result;
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::Json;
 use std::sync::Arc;
 use tracing::debug;
@@ -54,7 +54,7 @@ use validator::Validate;
 /// ### 条件查询
 /// 在以往我们经常会遇到这种场景：用户如果传入A，则进行过滤，否则不过滤，比如模糊搜索：
 ///
-/// 在postgres中可以这样实现:
+/// 在`postgres`中可以这样实现:
 ///
 /// ```
 /// WHERE (COALESCE($1, '') = '' OR project_name LIKE $2)
@@ -95,12 +95,14 @@ pub async fn find_projects(
         r#"
 WITH filtered_projects AS (SELECT id,
                                   project_name,
+                                  comment,
                                   COUNT(*) OVER () as total_count
                            FROM hm.projects
                            WHERE (COALESCE($1, '') = '' OR project_name LIKE $2)
                            LIMIT $3 OFFSET $4)
 SELECT id,
        project_name,
+       comment,
        total_count
 FROM filtered_projects;
     "#,
@@ -122,6 +124,7 @@ FROM filtered_projects;
         .map(|r| ProjectInfo {
             id: r.id,
             project_name: r.project_name,
+            comment: r.comment,
         }) // 使用map将数据库Record对象转换为ProjectInfo对象
         .collect(); // 转换回Vec
 
@@ -155,11 +158,12 @@ pub async fn create_project(
     let project = sqlx::query_as!(
         ProjectInfo,
         r#"
-insert into hm.projects (project_name)
-values ($1)
-returning id, project_name;
+insert into hm.projects (project_name, comment, created_at, updated_at)
+values ($1, $2, now(), now())
+returning id, project_name, comment;
     "#,
-        project.project_name
+        project.project_name,
+        project.comment
     )
     .fetch_one(&state.db_pool)
     .await?;
@@ -167,14 +171,93 @@ returning id, project_name;
     Ok(Json(Reply { data: project }))
 }
 
+/// 查询指定项目信息
 #[utoipa::path(get, path = "/projects/{id}", tag = "projects")]
 #[axum::debug_handler]
-pub async fn get_project(State(_state): State<Arc<AppState>>) {}
+pub async fn get_project(
+    State(_state): State<Arc<AppState>>,
+    Path(project_id): Path<i32>,
+) -> Result<Json<ProjectInfo>, AppError> {
+    debug!("Creating project id {:#?}", project_id);
 
+    let project = sqlx::query_as!(
+        ProjectInfo,
+        r#"
+select id, project_name, comment from hm.projects
+where id = $1
+limit 1
+    "#,
+        project_id
+    )
+    .fetch_one(&_state.db_pool)
+    .await?;
+
+    Ok(Json(project))
+}
+
+/// 更新项目信息
+///
+/// 根据用户指定的 `id` 和 修改信息 [`ProjectUpdate`] 来更新项目信息。
+///
+/// ## Sql
+///
+/// 由于更新数据中的字段大部分都是[`Option`]，因此我们使用了`postgresql`中的`coalesce`函数，如果用户输入的值
+/// 为None，那么会被转换为数据库的null，最终被转换为之前值。
+///
+/// 两个好处：
+/// - 防止前端输入了空数据，导致数据被误清除
+/// - 不用`if`拼接的方式，代码可维护性更好
+///
 #[utoipa::path(patch, path = "/projects/{id}", tag = "projects")]
 #[axum::debug_handler]
-pub async fn update_project(State(_state): State<Arc<AppState>>) {}
+pub async fn update_project(
+    State(state): State<Arc<AppState>>,
+    Path(project_id): Path<i32>,
+    Json(info): Json<ProjectUpdate>,
+) -> Result<Json<ProjectInfo>, AppError> {
+    debug!("Updating project {} with {:#?}", project_id, info);
 
+    let project = sqlx::query_as!(
+        ProjectInfo,
+        r#"
+update hm.projects
+set project_name = coalesce($2, project_name),
+    comment = coalesce($3, comment),
+    updated_at=now()
+where id = $1
+returning id, project_name, comment;
+        "#,
+        project_id,
+        info.project_name,
+        info.comment,
+    )
+    .fetch_one(&state.db_pool)
+    .await?;
+
+    Ok(Json(project))
+}
+
+/// 删除指定的项目
 #[utoipa::path(delete, path = "/projects/{id}", tag = "projects")]
 #[axum::debug_handler]
-pub async fn delete_project(State(_state): State<Arc<AppState>>) {}
+pub async fn delete_project(
+    State(state): State<Arc<AppState>>,
+    Path(project_id): Path<i32>,
+) -> Result<Json<ProjectInfo>, AppError> {
+    debug!("delete project {:#?}", project_id);
+
+    let project = sqlx::query_as!(
+        ProjectInfo,
+        r#"
+delete
+from hm.projects
+where id = $1
+returning id, project_name, comment;
+    "#,
+        project_id
+    )
+    .fetch_one(&state.db_pool)
+    .await?;
+
+    Ok(Json(project))
+}
