@@ -8,8 +8,18 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/bitnami/postgresql
+      - pg_data:/bitnami/postgresql
+  redis:
+    image: 'bitnami/redis'
+    environment:
+      REDIS_PASSWORD: o46UyptJsJNxqr
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/bitnami
 
 volumes:
-  pgdata:
+  pg_data:
+    driver: local
+  redis_data:
     driver: local
