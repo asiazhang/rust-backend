@@ -9,20 +9,23 @@
 //!
 //! 所有代码都放在一个程序中，方便部署和维护(适用于小型系统)
 
+use crate::crons::start_cron_tasks;
 use crate::models::app::AppState;
 use crate::routes::routers;
+use crate::tasks::start_job_consumers;
 use anyhow::{Context, Result};
 use axum::Router;
 use std::sync::Arc;
+use tokio::try_join;
 use tracing::info;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_scalar::{Scalar, Servable};
 
-mod routes;
+mod crons;
 mod models;
+mod routes;
 mod tasks;
-mod crons; 
 
 /// 入口函数
 ///
@@ -59,7 +62,12 @@ async fn main() -> Result<()> {
     info!("Starting server on {}", bind_addr);
 
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
-    axum::serve(listener, router.into_make_service()).await?;
+    let server_handle =
+        tokio::spawn(async move { axum::serve(listener, router.into_make_service()) });
+    let job_handle = tokio::spawn(start_job_consumers());
+    let cron_handle = tokio::spawn(start_cron_tasks());
+
+    _ = try_join!(server_handle, job_handle, cron_handle)?;
 
     Ok(())
 }
@@ -97,7 +105,7 @@ Rust后端例子，覆盖场景：
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .nest("/api/v1", routers(shared_state))
         .split_for_parts();
-    
+
     // 合并文档路由，用户可通过 /docs 访问文档网页地址
     router.merge(Scalar::with_url("/docs", api))
 }

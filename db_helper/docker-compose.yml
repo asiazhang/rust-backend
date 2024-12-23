@@ -12,7 +12,7 @@ services:
   redis:
     image: 'bitnami/redis'
     environment:
-      REDIS_PASSWORD: o46UyptJsJNxqr
+      REDIS_PASSWORD: F5chYxP2mGtKqL9d7u8CMp
     ports:
       - "6379:6379"
     volumes:
