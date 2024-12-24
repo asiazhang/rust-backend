@@ -11,17 +11,19 @@
 
 use crate::crons::start_cron_tasks;
 use crate::models::app::AppState;
+use crate::models::config::AppConfig;
 use crate::routes::routers;
 use crate::tasks::start_job_consumers;
 use anyhow::{Context, Result};
 use axum::Router;
 use std::sync::Arc;
+use tokio::signal;
+use tokio::sync::watch::Sender;
 use tokio::try_join;
 use tracing::info;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_scalar::{Scalar, Servable};
-use crate::models::config::AppConfig;
 
 mod crons;
 mod models;
@@ -37,7 +39,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
         .init();
-    
+
     let conf = AppConfig::load()?;
 
     // 创建postgres数据库连接池
@@ -56,17 +58,46 @@ async fn main() -> Result<()> {
     let bind_addr = "0.0.0.0:8080";
     info!("Starting server on {}", bind_addr);
 
-    let (tx, mut rx) = tokio::sync::watch::channel(false);
+    let (tx, rx) = tokio::sync::watch::channel(false);
 
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
-    let server_handle =
-        tokio::spawn(async move { axum::serve(listener, router.into_make_service()) });
-    let job_handle = tokio::spawn(start_job_consumers(conf.clone(), tx.subscribe()));
-    let cron_handle = tokio::spawn(start_cron_tasks(tx.subscribe()));
+    let server_handle = tokio::spawn(async move {
+        axum::serve(listener, router.into_make_service())
+            .with_graceful_shutdown(shutdown_signal(tx))
+    });
+    let job_handle = tokio::spawn(start_job_consumers(conf.clone(), rx.clone()));
+    let cron_handle = tokio::spawn(start_cron_tasks(rx.clone()));
 
     _ = try_join!(server_handle, job_handle, cron_handle)?;
 
     Ok(())
+}
+
+async fn shutdown_signal(tx: Sender<bool>) {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {info!("Received Ctrl+C, initiating shutdown...");},
+        _ = terminate => {info!("Received SIGTERM, initiating shutdown...");},
+    }
+
+    // 发送关闭信号
+    tx.send(true).expect("Failed to send signal");
 }
 
 /// 创建当前App的路由
