@@ -2,15 +2,17 @@
 //!
 //! 从Redis中读取消息并处理。通常来说都会正常ack，避免消息无限投递。
 
+pub mod task;
+
 use crate::models::config::AppConfig;
-use crate::models::tasks::TaskInfo;
+use crate::models::redis_task::RedisTask;
+use crate::tasks::task::TaskCreator;
 use anyhow::Result;
-use deadpool_redis::{Config, Pool, Runtime};
+use deadpool_redis::{Config, Runtime};
 use futures::future::try_join_all;
 use redis::streams::{StreamReadOptions, StreamReadReply};
 use redis::{AsyncCommands, RedisError, Value};
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::watch::Receiver;
 use tokio::try_join;
 use tracing::{debug, error, warn};
@@ -20,34 +22,36 @@ pub async fn start_job_consumers(app_config: Arc<AppConfig>, rx: Receiver<bool>)
     let pool = cfg.create_pool(Some(Runtime::Tokio1))?;
     pool.resize(app_config.max_redis_concurrency);
 
-    try_join!(start_create_task_consumers(pool.clone(), rx))?;
+    let create_task_info = RedisTask {
+        stream_name: "example_task_stream".to_string(),
+        group_name: "example_task_group".to_string(),
+        pool: pool.clone(),
+        cancel_rx: rx.clone(),
+        consumer_name: "task_consumer".to_string(),
+        handler: Box::new(TaskCreator),
+    };
+
+    try_join!(start_create_task_consumers(app_config, create_task_info))?;
 
     Ok(())
 }
 
 /// 并发启动新建任务的redis消费者
-pub async fn start_create_task_consumers(pool: Pool, cancel_rx: Receiver<bool>) -> Result<()> {
-    let stream_name = "example_task_stream";
-    let group_name = "example_task_group";
+pub async fn start_create_task_consumers(
+    app_config: Arc<AppConfig>,
+    redis_task: RedisTask,
+) -> Result<()> {
+    let mut con = redis_task.pool.get().await?;
+    let _: () = con
+        .xgroup_create(&redis_task.stream_name, &redis_task.group_name, "$")
+        .await?;
 
-    let mut con = pool.get().await?;
-    let _: () = con.xgroup_create(stream_name, group_name, "$").await?;
-
-    let consumers: Vec<_> = (0..5)
+    let consumers: Vec<_> = (0..app_config.redis.max_consumer_count)
         .map(|i| {
-            let clone_p = pool.clone();
-            let cancel_rx_clone = cancel_rx.clone();
+            let consumer_name = format!("{}_{}", redis_task.consumer_name, i);
+            let redis_task_clone = redis_task.clone();
 
-            tokio::spawn(async move {
-                consumer_task_worker(
-                    cancel_rx_clone,
-                    clone_p,
-                    stream_name,
-                    group_name,
-                    &format!("task_consumer_{}", i),
-                )
-                .await
-            })
+            tokio::spawn(async move { consumer_task_worker(redis_task_clone, consumer_name).await })
         })
         .collect();
 
@@ -58,26 +62,20 @@ pub async fn start_create_task_consumers(pool: Pool, cancel_rx: Receiver<bool>) 
 
 const MESSAGE_KEY: &str = "message";
 
-async fn consumer_task_worker(
-    mut cancel_rx: Receiver<bool>,
-    pool: Pool,
-    stream_name: &str,
-    group_name: &str,
-    consumer_name: &str,
-) -> Result<()> {
-    let mut undelivered_conn = pool.get().await?;
-    let mut pending_conn = pool.get().await?;
+async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) -> Result<()> {
+    let mut undelivered_conn = redis_task.pool.get().await?;
+    let mut pending_conn = redis_task.pool.get().await?;
 
     let opts = StreamReadOptions::default()
-        .group(group_name, consumer_name)
+        .group(&redis_task.group_name, consumer_name)
         .block(1000)
         .count(10);
-    let streams = vec![stream_name];
+    let streams = vec![redis_task.stream_name.clone()];
 
     loop {
         tokio::select! {
-            _ = cancel_rx.changed() => {
-                if *cancel_rx.borrow() {
+            _ = redis_task.cancel_rx.changed() => {
+                if *redis_task.cancel_rx.borrow() {
                     break;
                 }
             }
@@ -88,13 +86,12 @@ async fn consumer_task_worker(
                         consume_redis_message(
                             &mut undelivered_conn,
                             reply,
-                            stream_name,
-                            group_name
+                            &redis_task,
                         ).await?
                     },
                     Err(e) => {
                         warn!("xread failed, err: {}", e);
-                        undelivered_conn = pool.get().await?;
+                        undelivered_conn = redis_task.pool.get().await?;
                     }
                 }
             }
@@ -104,13 +101,12 @@ async fn consumer_task_worker(
                         consume_redis_message(
                             &mut pending_conn,
                             reply,
-                            stream_name,
-                            group_name
+                            &redis_task,
                         ).await?
                     },
                     Err(e) => {
                         warn!("xread failed, err: {}", e);
-                        pending_conn = pool.get().await?;
+                        pending_conn = redis_task.pool.get().await?;
                     }
                 }
             }
@@ -123,8 +119,7 @@ async fn consumer_task_worker(
 async fn consume_redis_message(
     conn: &mut deadpool_redis::Connection,
     reply: StreamReadReply,
-    stream_name: &str,
-    group_name: &str,
+    redis_task: &RedisTask,
 ) -> Result<()> {
     for key in reply.keys {
         for stream_id in key.ids {
@@ -132,24 +127,23 @@ async fn consume_redis_message(
 
             if let Some(Value::BulkString(data)) = stream_id.map.get(MESSAGE_KEY) {
                 if let Ok(raw) = String::from_utf8(data.to_vec()) {
-                    if let Ok(task_info) = serde_json::from_str::<TaskInfo>(&raw) {
-                        handle_task(task_info).await;
+                    if let Err(err) = redis_task.handler.handle_task(raw).await {
+                        error!("failed to handle redis message: {}", err);
+                    }
 
-                        let xack_ret: Result<(), RedisError> = conn
-                            .xack(stream_name, group_name, &[stream_id.id.as_str()])
-                            .await;
+                    let xack_ret: Result<(), RedisError> = conn
+                        .xack(
+                            &redis_task.stream_name,
+                            &redis_task.group_name,
+                            &[stream_id.id.as_str()],
+                        )
+                        .await;
 
-                        if let Err(err) = xack_ret {
-                            error!(
-                                "consumer redis message {} failed, err = {}",
-                                stream_id.id, err
-                            )
-                        }
-                    } else {
-                        warn!(
-                            "stream id {} format is not a TaskInfo, raw={}",
-                            stream_id.id, raw
-                        );
+                    if let Err(err) = xack_ret {
+                        error!(
+                            "consumer redis message {} from stream {} failed, err = {}",
+                            stream_id.id, &redis_task.stream_name, err
+                        )
                     }
                 } else {
                     warn!("stream id {} format is not a string", stream_id.id);
@@ -161,10 +155,4 @@ async fn consume_redis_message(
     }
 
     Ok(())
-}
-
-async fn handle_task(task: TaskInfo) {
-    debug!("[DEMO]handle task {:?}", task);
-
-    tokio::time::sleep(Duration::from_secs(5)).await;
 }

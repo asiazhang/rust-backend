@@ -1,10 +1,15 @@
 use anyhow::{Context, Result};
 use std::sync::Arc;
 
+pub struct RedisConfig {
+    pub max_consumer_count: usize,
+}
+
 pub struct AppConfig {
     pub postgresql_addr: String,
     pub redis_addr: String,
     pub max_redis_concurrency: usize,
+    pub redis: RedisConfig,
 }
 
 impl AppConfig {
@@ -24,6 +29,9 @@ impl AppConfig {
             postgresql_addr: db_url,
             redis_addr: redis_url,
             max_redis_concurrency: 16,
+            redis: RedisConfig {
+                max_consumer_count: 5,
+            },
         };
         Ok(Arc::new(config))
     }
