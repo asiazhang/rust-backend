@@ -14,12 +14,12 @@ use crate::models::app::AppState;
 use crate::models::config::AppConfig;
 use crate::routes::routers;
 use crate::tasks::start_job_consumers;
-use anyhow::{Context, Result};
 use axum::Router;
+use color_eyre::eyre::Context;
+use color_eyre::Result;
 use std::sync::Arc;
-use tokio::signal;
 use tokio::sync::watch::Sender;
-use tokio::try_join;
+use tokio::{signal, try_join};
 use tracing::info;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
@@ -35,6 +35,7 @@ mod tasks;
 /// - 使用tokio作为异步运行时，因此需要增加 `#[tokio::main]`
 #[tokio::main]
 async fn main() -> Result<()> {
+    color_eyre::install()?;
     // 使用tracing作为日志记录器
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
@@ -64,10 +65,12 @@ async fn main() -> Result<()> {
     let server_handle = tokio::spawn(async move {
         axum::serve(listener, router.into_make_service())
             .with_graceful_shutdown(shutdown_signal(tx))
+            .await
     });
     let job_handle = tokio::spawn(start_job_consumers(conf.clone(), rx.clone()));
     let cron_handle = tokio::spawn(start_cron_tasks(rx.clone()));
-
+    
+    // TODO: 这里 job_handle 错误并没有提前返回
     _ = try_join!(server_handle, job_handle, cron_handle)?;
 
     Ok(())

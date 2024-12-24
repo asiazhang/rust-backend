@@ -2,6 +2,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use color_eyre::eyre::Error;
 use redis::RedisError;
 use thiserror::Error;
 use validator::ValidationErrors;
@@ -23,7 +24,7 @@ pub enum AppError {
 
     /// 其他类型错误
     #[error(transparent)]
-    InternalError(#[from] anyhow::Error),
+    InternalError(#[from] Error),
 }
 
 /// Tell axum how to convert `AppError` into a response.

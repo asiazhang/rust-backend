@@ -6,7 +6,7 @@ use crate::models::common::Reply;
 use crate::models::common::ReplyList;
 use crate::models::err::AppError;
 use crate::models::projects::{ProjectCreate, ProjectInfo, ProjectSearch, ProjectUpdate};
-use anyhow::Result;
+use color_eyre::Result;
 use axum::extract::{Path, State};
 use axum::Json;
 use std::sync::Arc;

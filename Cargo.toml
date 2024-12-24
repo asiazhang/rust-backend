@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.94"
 async-trait = "0.1.83"
 axum = { version = "0.7.9", features = ["macros"] }
+color-eyre = "0.6.3"
 deadpool-redis = { version = "0.18.0", features = ["serde"] }
 dotenvy = "0.15.7"
 futures = "0.3.31"

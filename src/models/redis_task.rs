@@ -1,4 +1,4 @@
-use anyhow::Result;
+use color_eyre::Result;
 use async_trait::async_trait;
 use deadpool_redis::Pool;
 use tokio::sync::watch::Receiver;

@@ -1,4 +1,5 @@
-use anyhow::{Context, Result};
+use color_eyre::eyre::Context;
+use color_eyre::{Help, Result};
 use std::sync::Arc;
 
 pub struct RedisConfig {
@@ -19,11 +20,13 @@ impl AppConfig {
         dotenvy::dotenv()?;
 
         // 读取数据库地址信息（仅支持postgresql）
-        let db_url =
-            std::env::var("DATABASE_URL").context("Can not load DATABASE_URL in environment")?;
+        let db_url = std::env::var("DATABASE_URL")
+            .context("Can not load DATABASE_URL in environment")
+            .suggestion("设置 DATABASE_URL 环境变量")?;
 
-        let redis_url =
-            std::env::var("REDIS_URL").context("Can not load REDIS_URL in environment")?;
+        let redis_url = std::env::var("REDIS_URL")
+            .context("Can not load REDIS_URL in environment")
+            .suggestion("设置 REDIS_URL 环境变量")?;
 
         let config = AppConfig {
             postgresql_addr: db_url,

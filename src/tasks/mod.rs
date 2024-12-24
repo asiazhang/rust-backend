@@ -7,17 +7,17 @@ pub mod task;
 use crate::models::config::AppConfig;
 use crate::models::redis_task::RedisTask;
 use crate::tasks::task::TaskCreator;
-use anyhow::Result;
+use color_eyre::Result;
 use deadpool_redis::{Config, Runtime};
 use futures::future::try_join_all;
 use redis::streams::{StreamReadOptions, StreamReadReply};
 use redis::{AsyncCommands, RedisError, Value};
 use std::sync::Arc;
 use tokio::sync::watch::Receiver;
-use tokio::try_join;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 pub async fn start_job_consumers(app_config: Arc<AppConfig>, rx: Receiver<bool>) -> Result<()> {
+    info!("Starting redis job consumers with redis info {}...", &app_config.redis_addr);
     let cfg = Config::from_url(&app_config.redis_addr);
     let pool = cfg.create_pool(Some(Runtime::Tokio1))?;
     pool.resize(app_config.max_redis_concurrency);
@@ -31,7 +31,9 @@ pub async fn start_job_consumers(app_config: Arc<AppConfig>, rx: Receiver<bool>)
         handler: Box::new(TaskCreator),
     };
 
-    try_join!(start_create_task_consumers(app_config, create_task_info))?;
+    start_create_task_consumers(app_config, create_task_info).await?;
+
+    info!("Redis job consumers stopped");
 
     Ok(())
 }
@@ -42,9 +44,12 @@ pub async fn start_create_task_consumers(
     redis_task: RedisTask,
 ) -> Result<()> {
     let mut con = redis_task.pool.get().await?;
+    debug!("[OK] get redis conn from pool");
     let _: () = con
-        .xgroup_create(&redis_task.stream_name, &redis_task.group_name, "$")
+        .xgroup_create_mkstream(&redis_task.stream_name, &redis_task.group_name, "$")
         .await?;
+
+    debug!("try create redis consumer");
 
     let consumers: Vec<_> = (0..app_config.redis.max_consumer_count)
         .map(|i| {
@@ -63,11 +68,13 @@ pub async fn start_create_task_consumers(
 const MESSAGE_KEY: &str = "message";
 
 async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) -> Result<()> {
+    debug!("Redis job consumer {} started", consumer_name);
+
     let mut undelivered_conn = redis_task.pool.get().await?;
     let mut pending_conn = redis_task.pool.get().await?;
 
     let opts = StreamReadOptions::default()
-        .group(&redis_task.group_name, consumer_name)
+        .group(&redis_task.group_name, &consumer_name)
         .block(1000)
         .count(10);
     let streams = vec![redis_task.stream_name.clone()];
@@ -112,6 +119,8 @@ async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) 
             }
         }
     }
+
+    debug!("Redis job consumer {} ended", consumer_name);
 
     Ok(())
 }
