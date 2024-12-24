@@ -2,6 +2,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use redis::RedisError;
 use thiserror::Error;
 use validator::ValidationErrors;
 
@@ -16,6 +17,9 @@ pub enum AppError {
     /// 数据库错误
     #[error(transparent)]
     DatabaseError(#[from] sqlx::Error),
+
+    #[error(transparent)]
+    RedisError(#[from] RedisError),
 
     /// 其他类型错误
     #[error(transparent)]
@@ -41,6 +45,11 @@ impl IntoResponse for AppError {
                 )
                     .into_response(),
             },
+            AppError::RedisError(err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Redis error: {}", err),
+            )
+                .into_response(),
             AppError::InternalError(err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Something went wrong: {}", err),

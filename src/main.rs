@@ -21,6 +21,7 @@ use tracing::info;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_scalar::{Scalar, Servable};
+use crate::models::config::AppConfig;
 
 mod crons;
 mod models;
@@ -36,19 +37,13 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
         .init();
-
-    // 加载.env文件中的数据注入到环境变量中，方便本地测试
-    // 线上环境部署时会直接使用环境变量，不需要.env文件
-    dotenvy::dotenv()?;
-
-    // 读取数据库地址信息（仅支持postgresql）
-    let db_url =
-        std::env::var("DATABASE_URL").context("Can not load DATABASE_URL in environment")?;
+    
+    let conf = AppConfig::load()?;
 
     // 创建postgres数据库连接池
     // 使用默认配置，如果有调整需要可参考sqlx文档
     // 注意：pool已经是一个智能指针了，所以可以使用.clone()安全跨线程使用
-    let pool = sqlx::PgPool::connect(&db_url)
+    let pool = sqlx::PgPool::connect(&conf.postgresql_addr)
         .await
         .context("Connect to postgresql database")?;
 
@@ -61,11 +56,13 @@ async fn main() -> Result<()> {
     let bind_addr = "0.0.0.0:8080";
     info!("Starting server on {}", bind_addr);
 
+    let (tx, mut rx) = tokio::sync::watch::channel(false);
+
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
     let server_handle =
         tokio::spawn(async move { axum::serve(listener, router.into_make_service()) });
-    let job_handle = tokio::spawn(start_job_consumers());
-    let cron_handle = tokio::spawn(start_cron_tasks());
+    let job_handle = tokio::spawn(start_job_consumers(conf.clone(), tx.subscribe()));
+    let cron_handle = tokio::spawn(start_cron_tasks(tx.subscribe()));
 
     _ = try_join!(server_handle, job_handle, cron_handle)?;
 

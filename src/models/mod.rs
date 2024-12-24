@@ -9,3 +9,5 @@ pub mod app;
 pub mod err;
 
 pub mod tasks;
+
+pub mod config;
