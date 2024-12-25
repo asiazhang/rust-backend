@@ -11,13 +11,16 @@ use color_eyre::Result;
 use deadpool_redis::{Config, Runtime};
 use futures::future::try_join_all;
 use redis::streams::{StreamReadOptions, StreamReadReply};
-use redis::{AsyncCommands, RedisError, Value};
+use redis::{AsyncCommands, RedisError, RedisResult, Value};
 use std::sync::Arc;
 use tokio::sync::watch::Receiver;
 use tracing::{debug, error, info, warn};
 
 pub async fn start_job_consumers(app_config: Arc<AppConfig>, rx: Receiver<bool>) -> Result<()> {
-    info!("Starting redis job consumers with redis info {}...", &app_config.redis_addr);
+    info!(
+        "Starting redis job consumers with redis info {}...",
+        &app_config.redis_addr
+    );
     let cfg = Config::from_url(&app_config.redis_addr);
     let pool = cfg.create_pool(Some(Runtime::Tokio1))?;
     pool.resize(app_config.max_redis_concurrency);
@@ -44,12 +47,15 @@ pub async fn start_create_task_consumers(
     redis_task: RedisTask,
 ) -> Result<()> {
     let mut con = redis_task.pool.get().await?;
-    debug!("[OK] get redis conn from pool");
-    let _: () = con
+    let re: RedisResult<()> = con
         .xgroup_create_mkstream(&redis_task.stream_name, &redis_task.group_name, "$")
-        .await?;
-
-    debug!("try create redis consumer");
+        .await;
+    if let Err(err) = re {
+        warn!(
+            "Failed to create redis task group {}: {}",
+            redis_task.group_name, err
+        );
+    }
 
     let consumers: Vec<_> = (0..app_config.redis.max_consumer_count)
         .map(|i| {

@@ -5,6 +5,7 @@
 //! 用户可以在导出路由时传入共享数据 shared_state，这样所有路由函数都可以访问。
 
 use crate::models::app::AppState;
+use crate::models::config::AppConfig;
 use crate::routes::projects::__path_create_project;
 use crate::routes::projects::__path_delete_project;
 use crate::routes::projects::__path_find_projects;
@@ -19,12 +20,46 @@ use crate::routes::users::__path_find_users;
 use crate::routes::users::__path_get_user;
 use crate::routes::users::__path_update_user;
 use crate::routes::users::{create_user, delete_user, find_users, get_user, update_user};
+use axum::Router;
+use color_eyre::eyre::Context;
+use color_eyre::Result;
 use std::sync::Arc;
+use tokio::signal;
+use tokio::sync::watch::Sender;
+use tracing::info;
+use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
+use utoipa_scalar::{Scalar, Servable};
 
 pub mod projects;
 pub mod users;
+
+pub async fn start_axum_server(app_config: Arc<AppConfig>, tx: Sender<bool>) -> Result<()> {
+    // 创建postgres数据库连接池
+    // 使用默认配置，如果有调整需要可参考sqlx文档
+    // 注意：pool已经是一个智能指针了，所以可以使用.clone()安全跨线程使用
+    let pool = sqlx::PgPool::connect(&app_config.postgresql_addr)
+        .await
+        .context("Connect to postgresql database")?;
+
+    // 使用官方推荐的[共享状态方式](https://docs.rs/axum/latest/axum/#sharing-state-with-handlers)来在
+    // 不同的web处理器之间同步，主要是需要共享数据库连接池
+    let shared_state = Arc::new(AppState { db_pool: pool });
+
+    let router = create_app_router(shared_state);
+
+    let bind_addr = "0.0.0.0:8080";
+    info!("Starting server on {}", bind_addr);
+
+    let listener = tokio::net::TcpListener::bind(bind_addr).await?;
+
+    axum::serve(listener, router.into_make_service())
+        .with_graceful_shutdown(shutdown_signal(tx))
+        .await?;
+
+    Ok(())
+}
 
 /// 导出当前App的所有路由
 ///
@@ -49,7 +84,7 @@ pub mod users;
 /// .routes!(get)
 /// ```
 ///
-pub(super) fn routers(state: Arc<AppState>) -> OpenApiRouter {
+fn routers(state: Arc<AppState>) -> OpenApiRouter {
     OpenApiRouter::new()
         .routes(routes!(find_projects))
         .routes(routes!(
@@ -61,4 +96,69 @@ pub(super) fn routers(state: Arc<AppState>) -> OpenApiRouter {
         .routes(routes!(find_users))
         .routes(routes!(get_user, create_user, update_user, delete_user))
         .with_state(state)
+}
+
+/// 创建当前App的路由
+///
+/// 完成以下功能：
+/// - 生成OpenAPI文档
+/// - 生成App路由
+/// - 使用Scalar作为最终在线文档格式
+///
+/// 由于使用了 `utoipa` 库来自动化生成`openapi`文档，因此我们没有使用原生的 [`Router`]，而是使用了
+/// [`OpenApiRouter`] 。
+fn create_app_router(shared_state: Arc<AppState>) -> Router {
+    // 当前项目的OpenAPI声明
+    #[derive(OpenApi)]
+    #[openapi(
+        tags(
+            (name = "rust-backend", description = r#"
+Rust后端例子，覆盖场景：
+
+- API后端
+- 异步处理后端(Redis)
+- OpenAPI文档
+            "#)
+        ),
+    )]
+    struct ApiDoc;
+
+    // 使用`utoipa_axum`提供的OpenApiRouter来创建路由。
+    // 同时传递共享状态数据到路由中供使用。
+    // 最终拿到的变量：
+    // - router: Axum的Router，实际的路由对象
+    // - api: utoipa的OpenApi，生成的OpenAPI对象
+    let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
+        .nest("/api/v1", routers(shared_state))
+        .split_for_parts();
+
+    // 合并文档路由，用户可通过 /docs 访问文档网页地址
+    router.merge(Scalar::with_url("/docs", api))
+}
+
+async fn shutdown_signal(tx: Sender<bool>) {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {info!("Received Ctrl+C, initiating shutdown...");},
+        _ = terminate => {info!("Received SIGTERM, initiating shutdown...");},
+    }
+
+    // 发送关闭信号
+    tx.send(true).expect("Failed to send signal");
 }
