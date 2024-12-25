@@ -33,7 +33,7 @@ impl AppConfig {
             redis_addr: redis_url,
             max_redis_concurrency: 16,
             redis: RedisConfig {
-                max_consumer_count: 1,
+                max_consumer_count: 5,
             },
         };
         Ok(Arc::new(config))
