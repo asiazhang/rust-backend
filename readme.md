@@ -6,6 +6,8 @@
 - 后台任务消费者
 - 定时任务
 
+这个是一个单体应用，适合中小规模应用的开发。
+
 # 技术栈
 
 - [axum](https://github.com/tokio-rs/axum): Rust Web框架
