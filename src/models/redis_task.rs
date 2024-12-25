@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use color_eyre::Result;
 use async_trait::async_trait;
 use deadpool_redis::Pool;
@@ -9,7 +10,6 @@ use tokio::sync::watch::Receiver;
 /// - `stream_name`: 流名称不同，用于区分不同的消息业务类型
 /// - `consumer_name`: 消费者名称不同，方便定位识别，实际执行的时候会加上序号（并发处理的多个消费者）
 /// - `handler`: 核心业务处理器
-#[derive(Debug)]
 pub struct RedisTask {
 
     /// Redis流名称
@@ -27,8 +27,18 @@ pub struct RedisTask {
     /// Redis消息处理器
     ///
     /// 这是一个动态的处理器，需要符合 [`RedisHandler`] 特征
-    #[debug(skip)]
     pub handler: Box<dyn RedisHandler>,
+}
+
+impl Debug for RedisTask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RedisTask")
+            .field("stream_name", &self.stream_name)
+            .field("consumer_name", &self.consumer_name)
+            .field("pool", &self.pool)
+            .field("shutdown_rx", &self.shutdown_rx)
+            .finish()
+    }
 }
 
 /// 由于[`RedisTask`]需要在多个协程中并发执行，因此最好的方式是实现Clone特征
