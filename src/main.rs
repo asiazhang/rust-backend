@@ -27,7 +27,9 @@ mod tasks;
 /// - 使用tokio作为异步运行时，因此需要增加 `#[tokio::main]`
 #[tokio::main]
 async fn main() -> Result<()> {
+    // 安装错误提示器
     color_eyre::install()?;
+
     // 使用tracing作为日志记录器
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
@@ -48,7 +50,7 @@ async fn main() -> Result<()> {
         // 启动cron-jobs服务
         start_cron_tasks(rx.clone())
     )?;
-    
+
     info!("rust backend exit successfully");
 
     Ok(())
