@@ -11,7 +11,6 @@ use color_eyre::eyre::Context;
 use color_eyre::{eyre, Result};
 use deadpool_redis::{Config, Runtime};
 use futures::future::try_join_all;
-use futures::FutureExt;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use redis::streams::{StreamReadOptions, StreamReadReply};
@@ -19,27 +18,57 @@ use redis::{AsyncCommands, RedisError, RedisResult, Value};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch::Receiver;
+use tokio::try_join;
 use tracing::{debug, error, info, warn};
 
-pub async fn start_job_consumers(app_config: Arc<AppConfig>, rx: Receiver<bool>) -> Result<()> {
+/// 启动redis消费者
+///
+/// ## 参数说明
+/// - `app_config`: 程序配置
+/// - `rx`: 用于接收关闭信号
+///
+/// ## 通用处理
+///
+/// 代码中的[`start_create_task_consumers`]是一个通用redis处理器，封装了相关逻辑，用户仅需要创建一个
+/// [`RedisTask`]类型的结构体，传递给通用处理器即可。
+///
+/// 主要核心处理函数在handler，这是一个实现了[`crate::models::redis_task::RedisHandler`] 特征的处理器。
+/// 
+/// 用户一般这样使用：
+/// 
+/// ```rust
+/// let info1 = RedisTask {handler: Box::new(Task1), ...}
+/// let info2 = RedisTask {handler: Box::new(Task2), ...}
+/// 
+/// try_join!(
+///     start_create_task_consumers(app_config, info1),
+///     start_create_task_consumers(app_config, info2),
+/// )?;
+/// ```
+/// 
+pub async fn start_job_consumers(
+    app_config: Arc<AppConfig>,
+    shutdown_rx: Receiver<bool>,
+) -> Result<()> {
     info!(
         "Starting redis job consumers with redis info {}...",
-        &app_config.redis_addr
+        &app_config.redis.redis_conn_str
     );
-    let cfg = Config::from_url(&app_config.redis_addr);
+
+    let cfg = Config::from_url(&app_config.redis.redis_conn_str);
     let pool = cfg.create_pool(Some(Runtime::Tokio1))?;
-    pool.resize(app_config.max_redis_concurrency);
+    pool.resize(app_config.redis.max_redis_pool_size);
 
     let create_task_info = RedisTask {
         stream_name: "example_task_stream".to_string(),
         group_name: "example_task_group".to_string(),
         pool: pool.clone(),
-        cancel_rx: rx.clone(),
+        cancel_rx: shutdown_rx.clone(),
         consumer_name: "task_consumer".to_string(),
         handler: Box::new(TaskCreator),
     };
 
-    start_create_task_consumers(app_config, create_task_info).await?;
+    try_join!(start_create_task_consumers(app_config, create_task_info))?;
 
     info!("Redis job consumers stopped");
 

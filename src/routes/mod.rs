@@ -35,11 +35,11 @@ use utoipa_scalar::{Scalar, Servable};
 pub mod projects;
 pub mod users;
 
-pub async fn start_axum_server(app_config: Arc<AppConfig>, tx: Sender<bool>) -> Result<()> {
+pub async fn start_axum_server(app_config: Arc<AppConfig>, shutdown_tx: Sender<bool>) -> Result<()> {
     // 创建postgres数据库连接池
     // 使用默认配置，如果有调整需要可参考sqlx文档
     // 注意：pool已经是一个智能指针了，所以可以使用.clone()安全跨线程使用
-    let pool = sqlx::PgPool::connect(&app_config.postgresql_addr)
+    let pool = sqlx::PgPool::connect(&app_config.postgresql_conn_str)
         .await
         .context("Connect to postgresql database")?;
 
@@ -55,7 +55,7 @@ pub async fn start_axum_server(app_config: Arc<AppConfig>, tx: Sender<bool>) -> 
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
 
     axum::serve(listener, router.into_make_service())
-        .with_graceful_shutdown(shutdown_signal(tx))
+        .with_graceful_shutdown(shutdown_signal(shutdown_tx))
         .await?;
 
     Ok(())
@@ -136,7 +136,7 @@ Rust后端例子，覆盖场景：
     router.merge(Scalar::with_url("/docs", api))
 }
 
-async fn shutdown_signal(tx: Sender<bool>) {
+async fn shutdown_signal(shutdown_tx: Sender<bool>) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -160,5 +160,5 @@ async fn shutdown_signal(tx: Sender<bool>) {
     }
 
     // 发送关闭信号
-    tx.send(true).expect("Failed to send signal");
+    shutdown_tx.send(true).expect("Failed to send signal");
 }

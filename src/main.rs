@@ -39,16 +39,16 @@ async fn main() -> Result<()> {
     let conf = AppConfig::load()?;
 
     // 优雅退出通知机制，通过watch来通知需要感知的协程优雅退出
-    let (tx, rx) = tokio::sync::watch::channel(false);
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
     // 如果有任何一个服务启动失败，那么应该会退出并打印错误信息
     _ = try_join!(
         // 启动web-api服务
-        start_axum_server(conf.clone(), tx),
+        start_axum_server(conf.clone(), shutdown_tx),
         // 启动redis-consumer服务
-        start_job_consumers(conf.clone(), rx.clone()),
+        start_job_consumers(conf.clone(), shutdown_rx.clone()),
         // 启动cron-jobs服务
-        start_cron_tasks(rx.clone())
+        start_cron_tasks(shutdown_rx.clone())
     )?;
 
     info!("rust backend exit successfully");
