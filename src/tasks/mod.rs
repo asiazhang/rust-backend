@@ -115,10 +115,10 @@ pub async fn start_create_task_consumers(
 
     let consumers: Vec<_> = (0..app_config.redis.max_consumer_count)
         .map(|i| {
-            let consumer_name = format!("{}_{}", redis_task.consumer_name, i);
-            let redis_task_clone = redis_task.clone();
-
-            tokio::spawn(async move { consumer_task_worker(redis_task_clone, consumer_name).await })
+            consumer_task_worker(
+                redis_task.clone(),
+                format!("{}_{}", redis_task.consumer_name, i),
+            )
         })
         .collect();
 
@@ -139,7 +139,7 @@ async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) 
     let mut pending_conn = redis_task.pool.get().await?;
 
     let mut rng = StdRng::from_entropy();
-    let value = rng.gen_range(1..=5);
+    let value = rng.gen_range(1..=10);
     if value < 2 {
         warn!("This consumer [{}] random failed", consumer_name);
         eyre::bail!("This consumer [{}] random failed", consumer_name);
@@ -147,6 +147,7 @@ async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) 
 
     let opts = StreamReadOptions::default()
         .group(GROUP_NAME, &consumer_name)
+        .block(1000)
         .count(10);
     let streams = vec![redis_task.stream_name.clone()];
 
