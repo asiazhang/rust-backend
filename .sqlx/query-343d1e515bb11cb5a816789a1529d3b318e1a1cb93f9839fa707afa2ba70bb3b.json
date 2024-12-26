@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\nWITH filtered_projects AS (SELECT id,\n                                  project_name,\n                                  comment,\n                                  COUNT(*) OVER () as total_count\n                           FROM hm.projects\n                           WHERE (COALESCE($1, '') = '' OR project_name LIKE $2)\n                           LIMIT $3 OFFSET $4)\nSELECT id,\n       project_name,\n       comment,\n       total_count\nFROM filtered_projects;\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "project_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "comment",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "total_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "343d1e515bb11cb5a816789a1529d3b318e1a1cb93f9839fa707afa2ba70bb3b"
+}

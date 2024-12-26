@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\ninsert into hm.projects (project_name, comment, created_at, updated_at)\nvalues ($1, $2, now(), now())\nreturning id, project_name, comment;\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "project_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "comment",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f4ad96b56876289ba97fdf3ce3d7f343b250c973e18c0963e3fe89e1d48b7bca"
+}

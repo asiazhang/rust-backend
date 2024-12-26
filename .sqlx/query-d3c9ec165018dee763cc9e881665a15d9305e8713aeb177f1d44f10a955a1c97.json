@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\ndelete\nfrom hm.projects\nwhere id = $1\nreturning id, project_name, comment;\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "project_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "comment",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d3c9ec165018dee763cc9e881665a15d9305e8713aeb177f1d44f10a955a1c97"
+}

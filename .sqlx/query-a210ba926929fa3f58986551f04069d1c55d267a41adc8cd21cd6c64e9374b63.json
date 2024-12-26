@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\ninsert into hm.projects (project_name)\nvalues ($1)\nreturning id, project_name;\n    ",
+  "query": "\nselect id, project_name, comment from hm.projects\nwhere id = $1\nlimit 1\n    ",
   "describe": {
     "columns": [
       {
@@ -12,17 +12,23 @@
         "ordinal": 1,
         "name": "project_name",
         "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "comment",
+        "type_info": "Varchar"
       }
     ],
     "parameters": {
       "Left": [
-        "Varchar"
+        "Int4"
       ]
     },
     "nullable": [
       false,
+      false,
       false
     ]
   },
-  "hash": "7c71e3914021ffd6c33ffa0d029b4a598452e43750fe262c39dac96f392b8788"
+  "hash": "a210ba926929fa3f58986551f04069d1c55d267a41adc8cd21cd6c64e9374b63"
 }
