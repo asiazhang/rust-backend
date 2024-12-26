@@ -133,13 +133,13 @@ const MESSAGE_KEY: &str = "message";
 
 async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) -> Result<()> {
     debug!("Redis job consumer {} started", consumer_name);
-
+    
     let mut pending_conn = redis_task.pool.get().await?;
 
     let opts = StreamReadOptions::default()
         .group(GROUP_NAME, &consumer_name)
-        .block(1000)
-        .count(10);
+        .block(1000) // 最长等待时间1秒，可以满足大多数场景
+        .count(10); // 最多获取10个数据
     let streams = vec![redis_task.stream_name.clone()];
 
     // 这里必须要把shutdown_rx克隆一次
@@ -179,10 +179,13 @@ async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) 
 ///
 /// **注意**：block超时参数对0流无效，所以读取0流不会阻塞。
 ///
+/// > https://redis.io/docs/latest/commands/xreadgroup/
 /// > 因此，基本上，如果 ID 不是> ，那么该命令只会让客户端访问其挂起的条目：消息已传递给它，但尚未确认。
 /// > 请注意，在这种情况下，**`BLOCK` 和 `NOACK` 都被忽略**。
 ///
 /// ## `>`流
+///
+/// `>`流表示读取redis中的undelivered数据。会正常遵守block时间。
 async fn xread_group(
     conn: &mut Connection,
     streams: &Vec<String>,
@@ -210,6 +213,11 @@ async fn consume_redis_message(
     redis_task: &RedisTask,
 ) -> Result<()> {
     for key in reply.keys {
+        // 为空不处理，避免后续多余操作
+        if key.ids.is_empty() {
+            continue;
+        }
+
         let tasks = key
             .ids
             .iter()
