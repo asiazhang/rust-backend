@@ -8,15 +8,14 @@ use crate::models::config::AppConfig;
 use crate::models::redis_task::RedisTask;
 use crate::tasks::task::TaskCreator;
 use color_eyre::eyre::Context;
-use color_eyre::{eyre, Result};
-use deadpool_redis::{Config, Runtime};
+use color_eyre::Result;
+use deadpool_redis::{Config, Connection, Runtime};
 use futures::future::try_join_all;
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
-use redis::streams::{StreamReadOptions, StreamReadReply};
+use futures::stream::iter;
+use futures::StreamExt;
+use redis::streams::{StreamId, StreamReadOptions, StreamReadReply};
 use redis::{AsyncCommands, RedisError, RedisResult, Value};
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::watch::Receiver;
 use tokio::try_join;
 use tracing::{debug, error, info, warn};
@@ -172,17 +171,31 @@ async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) 
     Ok(())
 }
 
+/// 调用xread group读取redis流里面的数据
+///
+/// ## `0`流
+///
+/// `0`流表示读取redis中的pending数据（之前没有ack处理完成的）。
+///
+/// **注意**：block超时参数对0流无效，所以读取0流不会阻塞。
+///
+/// > 因此，基本上，如果 ID 不是> ，那么该命令只会让客户端访问其挂起的条目：消息已传递给它，但尚未确认。
+/// > 请注意，在这种情况下，**`BLOCK` 和 `NOACK` 都被忽略**。
+///
+/// ## `>`流
 async fn xread_group(
-    conn: &mut deadpool_redis::Connection,
+    conn: &mut Connection,
     streams: &Vec<String>,
     opts: &StreamReadOptions,
     redis_task: &mut RedisTask,
 ) -> Result<()> {
+    // 先处理pending数据
     let pending_msg = conn
         .xread_options::<String, &str, StreamReadReply>(streams, &["0"], &opts)
         .await?;
     consume_redis_message(conn, pending_msg, redis_task).await?;
 
+    // 再处理未发布消息，这里会block，因此不用担心对redis读取太快
     let undelivered_msg = conn
         .xread_options::<String, &str, StreamReadReply>(streams, &[">"], &opts)
         .await?;
@@ -192,42 +205,49 @@ async fn xread_group(
 }
 
 async fn consume_redis_message(
-    conn: &mut deadpool_redis::Connection,
+    conn: &mut Connection,
     reply: StreamReadReply,
     redis_task: &RedisTask,
 ) -> Result<()> {
     for key in reply.keys {
-        for stream_id in key.ids {
-            debug!("processing redis stream id {}", stream_id.id);
+        let tasks = key
+            .ids
+            .iter()
+            .map(|id| consume_single_redis_message(&redis_task, id))
+            .collect::<Vec<_>>();
 
-            if let Some(Value::BulkString(data)) = stream_id.map.get(MESSAGE_KEY) {
-                if let Ok(raw) = String::from_utf8(data.to_vec()) {
-                    if let Err(err) = redis_task.handler.handle_task(raw).await {
-                        error!("failed to handle redis message: {}", err);
-                    }
+        iter(tasks).buffer_unordered(5).collect::<Vec<_>>().await;
 
-                    let xack_ret: Result<(), RedisError> = conn
-                        .xack(
-                            &redis_task.stream_name,
-                            GROUP_NAME,
-                            &[stream_id.id.as_str()],
-                        )
-                        .await;
+        // 批量ack数据
+        let xack_ret: Result<(), RedisError> = conn
+            .xack(
+                &redis_task.stream_name,
+                GROUP_NAME,
+                &[key.ids.into_iter().map(|it| it.id).collect::<Vec<_>>()],
+            )
+            .await;
 
-                    if let Err(err) = xack_ret {
-                        error!(
-                            "consumer redis message {} from stream {} failed, err = {}",
-                            stream_id.id, &redis_task.stream_name, err
-                        )
-                    }
-                } else {
-                    warn!("stream id {} format is not a string", stream_id.id);
-                }
-            } else {
-                warn!("stream id {} not found", stream_id.id);
-            }
+        if let Err(err) = xack_ret {
+            error!(
+                "xack batch consumer redis message from stream {} failed, err = {}",
+                &redis_task.stream_name, err
+            )
         }
     }
 
     Ok(())
+}
+
+async fn consume_single_redis_message(redis_task: &&RedisTask, stream_id: &StreamId) {
+    if let Some(Value::BulkString(data)) = stream_id.map.get(MESSAGE_KEY) {
+        if let Ok(raw) = String::from_utf8(data.to_vec()) {
+            if let Err(err) = redis_task.handler.handle_task(raw).await {
+                error!("failed to handle redis message: {}", err);
+            }
+        } else {
+            warn!("stream id {} format is not a string", stream_id.id);
+        }
+    } else {
+        warn!("stream id {} not found", stream_id.id);
+    }
 }
