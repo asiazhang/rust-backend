@@ -35,7 +35,10 @@ use utoipa_scalar::{Scalar, Servable};
 pub mod projects;
 pub mod users;
 
-pub async fn start_axum_server(app_config: Arc<AppConfig>, shutdown_tx: Sender<bool>) -> Result<()> {
+pub async fn start_axum_server(
+    app_config: Arc<AppConfig>,
+    shutdown_tx: Sender<bool>,
+) -> Result<()> {
     // 创建postgres数据库连接池
     // 使用默认配置，如果有调整需要可参考sqlx文档
     // 注意：pool已经是一个智能指针了，所以可以使用.clone()安全跨线程使用

@@ -1,7 +1,7 @@
-use std::fmt::Debug;
-use color_eyre::Result;
 use async_trait::async_trait;
+use color_eyre::Result;
 use deadpool_redis::Pool;
+use std::fmt::Debug;
 use tokio::sync::watch::Receiver;
 
 /// Redis消费者任务信息
@@ -11,7 +11,6 @@ use tokio::sync::watch::Receiver;
 /// - `consumer_name`: 消费者名称不同，方便定位识别，实际执行的时候会加上序号（并发处理的多个消费者）
 /// - `handler`: 核心业务处理器
 pub struct RedisTask {
-
     /// Redis流名称
     pub stream_name: String,
 

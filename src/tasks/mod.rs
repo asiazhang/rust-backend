@@ -133,8 +133,8 @@ const MESSAGE_KEY: &str = "message";
 
 async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) -> Result<()> {
     debug!("Redis job consumer {} started", consumer_name);
-    
-    let mut pending_conn = redis_task.pool.get().await?;
+
+    let mut redis_conn = redis_task.pool.get().await?;
 
     let opts = StreamReadOptions::default()
         .group(GROUP_NAME, &consumer_name)
@@ -154,12 +154,18 @@ async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) 
                   break;
               }
           }
-          result = xread_group(&mut pending_conn,&streams,&opts,&mut redis_task) => {
+          result = xread_group(&mut redis_conn,&streams,&opts,&mut redis_task) => {
               match result {
                   Ok(_) => {}
                   Err(err) => {
-                      warn!("xread group failed, err: {}, reconnecting...", err);
-                      pending_conn = redis_task.pool.get().await?;
+                        warn!("{} xread group failed, err: {}, reconnecting...", consumer_name, err);
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                        match redis_task.pool.get().await {
+                            Ok(conn) => redis_conn = conn,
+                            Err(err) => {
+                                warn!("{} get redis conn from pool failed, err: {}, reconnecting...", consumer_name,err)
+                            }
+                        }
                   }
               }
           }

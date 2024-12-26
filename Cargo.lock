@@ -1459,7 +1459,6 @@ dependencies = [
  "deadpool-redis",
  "dotenvy",
  "futures",
- "rand",
  "redis",
  "serde",
  "serde_json",
