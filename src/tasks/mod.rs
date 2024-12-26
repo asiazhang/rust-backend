@@ -135,7 +135,6 @@ const MESSAGE_KEY: &str = "message";
 async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) -> Result<()> {
     debug!("Redis job consumer {} started", consumer_name);
 
-    let mut undelivered_conn = redis_task.pool.get().await?;
     let mut pending_conn = redis_task.pool.get().await?;
 
     let opts = StreamReadOptions::default()
@@ -144,55 +143,50 @@ async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) 
         .count(10);
     let streams = vec![redis_task.stream_name.clone()];
 
+    // 这里必须要把shutdown_rx克隆一次
+    // 否则在[`select!`]多个分支中，都会访问到 &mut redis_task
+    // 这样会违反redis的借用原则（mut借用在作用域里面只能有一个）
+    let mut shutdown_rx = redis_task.shutdown_rx.clone();
+
     loop {
         tokio::select! {
-            _ = redis_task.shutdown_rx.changed() => {
-                if *redis_task.shutdown_rx.borrow() {
-                    break;
-                }
-            }
-            pending_result = pending_conn.xread_options::<String, &str, StreamReadReply>(&streams, &["0"], &opts) => {
-                match pending_result {
-                    Ok(reply) if reply.keys.iter().all(|item| item.ids.is_empty()) => {
-                        debug!("{} pending_conn: sleeping...", consumer_name);
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                    },
-                    Ok(reply) => {
-                        consume_redis_message(
-                            &mut pending_conn,
-                            reply,
-                            &redis_task,
-                        ).await?
-                    },
-                    Err(e) => {
-                        warn!("xread failed, err: {}", e);
-                        pending_conn = redis_task.pool.get().await?;
-                    }
-                }
-            }
-            result = undelivered_conn.xread_options::<String, &str, StreamReadReply>(&streams, &[">"], &opts) => {
-                match result {
-                    Ok(reply) if reply.keys.iter().all(|item| item.ids.is_empty())  => {
-                        debug!("{} undelivered_conn: sleeping...", consumer_name);
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                    },
-                    Ok(reply) => {
-                        consume_redis_message(
-                            &mut undelivered_conn,
-                            reply,
-                            &redis_task,
-                        ).await?
-                    },
-                    Err(e) => {
-                        warn!("xread failed, err: {}", e);
-                        undelivered_conn = redis_task.pool.get().await?;
-                    },
-                }
-            }
+          _ = shutdown_rx.changed() => {
+              if *shutdown_rx.borrow() {
+                  break;
+              }
+          }
+          result = xread_group(&mut pending_conn,&streams,&opts,&mut redis_task) => {
+              match result {
+                  Ok(_) => {}
+                  Err(err) => {
+                      warn!("xread group failed, err: {}, reconnecting...", err);
+                      pending_conn = redis_task.pool.get().await?;
+                  }
+              }
+          }
         }
     }
 
     debug!("Redis job consumer {} ended", consumer_name);
+
+    Ok(())
+}
+
+async fn xread_group(
+    conn: &mut deadpool_redis::Connection,
+    streams: &Vec<String>,
+    opts: &StreamReadOptions,
+    redis_task: &mut RedisTask,
+) -> Result<()> {
+    let pending_msg = conn
+        .xread_options::<String, &str, StreamReadReply>(streams, &["0"], &opts)
+        .await?;
+    consume_redis_message(conn, pending_msg, redis_task).await?;
+
+    let undelivered_msg = conn
+        .xread_options::<String, &str, StreamReadReply>(streams, &[">"], &opts)
+        .await?;
+    consume_redis_message(conn, undelivered_msg, redis_task).await?;
 
     Ok(())
 }
