@@ -138,13 +138,6 @@ async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) 
     let mut undelivered_conn = redis_task.pool.get().await?;
     let mut pending_conn = redis_task.pool.get().await?;
 
-    let mut rng = StdRng::from_entropy();
-    let value = rng.gen_range(1..=10);
-    if value < 2 {
-        warn!("This consumer [{}] random failed", consumer_name);
-        eyre::bail!("This consumer [{}] random failed", consumer_name);
-    }
-
     let opts = StreamReadOptions::default()
         .group(GROUP_NAME, &consumer_name)
         .block(1000)
