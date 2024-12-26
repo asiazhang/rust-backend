@@ -223,7 +223,7 @@ async fn consume_redis_message(
             .xack(
                 &redis_task.stream_name,
                 GROUP_NAME,
-                &[key.ids.into_iter().map(|it| it.id).collect::<Vec<_>>()],
+                &key.ids.iter().map(|it| &it.id).collect::<Vec<_>>(),
             )
             .await;
 
