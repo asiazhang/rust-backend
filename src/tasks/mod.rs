@@ -125,20 +125,10 @@ async fn start_create_task_consumers(
     app_config: Arc<AppConfig>,
     redis_task: RedisTask,
 ) -> Result<()> {
-    // 从Redis连接池获取链接
-    let mut con = redis_task
-        .pool
-        .get()
-        .await
-        .context("get redis connection from pool")?;
+    create_task_group(&redis_task).await?;
 
-    let re: RedisResult<()> = con
-        .xgroup_create_mkstream(&redis_task.stream_name, GROUP_NAME, "$")
-        .await;
-    if let Err(err) = re {
-        warn!("Failed to create redis task group {}: {}", GROUP_NAME, err);
-    }
-
+    // 根据配置数据，创建多个消费者。
+    // 这几个消费者会并行从redis读取消息并消费。
     let consumers: Vec<_> = (0..app_config.redis.max_consumer_count)
         .map(|i| {
             consumer_task_worker(
@@ -148,6 +138,7 @@ async fn start_create_task_consumers(
         })
         .collect();
 
+    // 有任何一个消费者创建失败，则返回失败，让上层进行重试
     try_join_all(consumers).await.context(format!(
         "wait for all consumer [{}] end",
         redis_task.consumer_name
@@ -157,6 +148,25 @@ async fn start_create_task_consumers(
 }
 
 const MESSAGE_KEY: &str = "message";
+
+async fn create_task_group(redis_task: &RedisTask) -> Result<()> {
+    let mut con = redis_task
+        .pool
+        .get()
+        .await
+        .context("get redis connection from pool")?;
+
+    // 创建消费组，来支持并行消费消息。
+    // 由于消费组不能多次创建，因此失败了提示warning即可
+    let re: RedisResult<()> = con
+        .xgroup_create_mkstream(&redis_task.stream_name, GROUP_NAME, "$")
+        .await;
+    if let Err(err) = re {
+        warn!("Failed to create redis task group {}: {}", GROUP_NAME, err);
+    }
+    
+    Ok(())
+}
 
 async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) -> Result<()> {
     debug!("Redis job consumer {} started", consumer_name);
@@ -176,11 +186,13 @@ async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) 
 
     loop {
         tokio::select! {
+            // 如果收到shutdown信号，则直接退出
           _ = shutdown_rx.changed() => {
               if *shutdown_rx.borrow() {
                   break;
               }
           }
+            // 没有收到shutdown信号，则读取redis消息并处理
           result = xread_group(&mut redis_conn,&streams,&opts,&mut redis_task) => {
               match result {
                   Ok(_) => {}
@@ -254,12 +266,13 @@ async fn consume_redis_message(
         let tasks = key
             .ids
             .iter()
-            .map(|id| consume_single_redis_message(&redis_task, id))
+            .map(|id| consume_single_redis_message(redis_task, id))
             .collect::<Vec<_>>();
-
+        
+        // 并行处理任务，加快处理速度
         iter(tasks).buffer_unordered(5).collect::<Vec<_>>().await;
 
-        // 批量ack数据
+        // 批量ack数据，提升效率
         let xack_ret: Result<(), RedisError> = conn
             .xack(
                 &redis_task.stream_name,
@@ -279,7 +292,14 @@ async fn consume_redis_message(
     Ok(())
 }
 
-async fn consume_single_redis_message(redis_task: &&RedisTask, stream_id: &StreamId) {
+/// 处理单个Redis消息
+/// 
+/// 处理要求：
+/// 1. 消息必须是String类型
+/// 2. 消息必须能转换为utf-8字符串
+/// 
+/// 这样才会把对应的String交给 [`RedisTask`]中的`handler`来处理。
+async fn consume_single_redis_message(redis_task: &RedisTask, stream_id: &StreamId) {
     if let Some(Value::BulkString(data)) = stream_id.map.get(MESSAGE_KEY) {
         if let Ok(raw) = String::from_utf8(data.to_vec()) {
             if let Err(err) = redis_task.handler.handle_task(raw).await {
