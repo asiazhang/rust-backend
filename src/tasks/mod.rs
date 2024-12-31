@@ -85,7 +85,12 @@ pub async fn start_job_consumers(
         handler: Box::new(TaskCreator),
     };
 
-    try_join!(start_create_task_consumers(app_config, create_task_info))?;
+    // NOTE: 如果有其他需要处理的Redis类型，那么按照👆的例子来编写
+    // 统一调用 `guard_start_create_task_consumers(app_config.clone(), xxx)`
+    try_join!(guard_start_create_task_consumers(
+        app_config.clone(),
+        create_task_info
+    ))?;
 
     info!("Redis job consumers stopped");
 
@@ -94,11 +99,33 @@ pub async fn start_job_consumers(
 
 const GROUP_NAME: &str = "rust-backend";
 
-/// 并发启动新建任务的redis消费者
-pub async fn start_create_task_consumers(
+/// 让redis消费者一直执行，直到收到shutdown信号
+///
+/// 只要是失败的场景，则一直不停重试，确保消费者不退出
+async fn guard_start_create_task_consumers(
     app_config: Arc<AppConfig>,
     redis_task: RedisTask,
 ) -> Result<()> {
+    loop {
+        let re = start_create_task_consumers(app_config.clone(), redis_task.clone()).await;
+        match re {
+            Ok(_) => break, // OK表示收到shutdown信号，正常退出
+            Err(_) => {
+                warn!("Failed to start create task consumers, retrying...");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// 并发启动新建任务的redis消费者
+async fn start_create_task_consumers(
+    app_config: Arc<AppConfig>,
+    redis_task: RedisTask,
+) -> Result<()> {
+    // 从Redis连接池获取链接
     let mut con = redis_task
         .pool
         .get()
@@ -194,19 +221,19 @@ async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) 
 /// `>`流表示读取redis中的undelivered数据。会正常遵守block时间。
 async fn xread_group(
     conn: &mut Connection,
-    streams: &Vec<String>,
+    streams: &[String],
     opts: &StreamReadOptions,
     redis_task: &mut RedisTask,
 ) -> Result<()> {
     // 先处理pending数据
     let pending_msg = conn
-        .xread_options::<String, &str, StreamReadReply>(streams, &["0"], &opts)
+        .xread_options::<String, &str, StreamReadReply>(streams, &["0"], opts)
         .await?;
     consume_redis_message(conn, pending_msg, redis_task).await?;
 
     // 再处理未发布消息，这里会block，因此不用担心对redis读取太快
     let undelivered_msg = conn
-        .xread_options::<String, &str, StreamReadReply>(streams, &[">"], &opts)
+        .xread_options::<String, &str, StreamReadReply>(streams, &[">"], opts)
         .await?;
     consume_redis_message(conn, undelivered_msg, redis_task).await?;
 
