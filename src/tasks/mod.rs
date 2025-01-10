@@ -16,6 +16,7 @@ use futures::StreamExt;
 use redis::streams::{StreamId, StreamReadOptions, StreamReadReply};
 use redis::{AsyncCommands, RedisError, RedisResult, Value};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::watch::Receiver;
 use tokio::try_join;
 use tracing::{debug, error, info, warn};
@@ -131,9 +132,10 @@ async fn start_create_task_consumers(
     // 这几个消费者会并行从redis读取消息并消费。
     let consumers: Vec<_> = (0..app_config.redis.max_consumer_count)
         .map(|i| {
-            consumer_task_worker(
+            let consumer_name = format!("{}_{}", redis_task.consumer_name, i);
+            consumer_task_worker_with_heartbeat(
                 redis_task.clone(),
-                format!("{}_{}", redis_task.consumer_name, i),
+                consumer_name,
             )
         })
         .collect();
@@ -164,7 +166,46 @@ async fn create_task_group(redis_task: &RedisTask) -> Result<()> {
     if let Err(err) = re {
         warn!("Failed to create redis task group {}: {}", GROUP_NAME, err);
     }
-    
+
+    Ok(())
+}
+
+async fn consumer_task_worker_with_heartbeat(
+    redis_task: RedisTask,
+    consumer_name: String,
+) -> Result<()> {
+    _ = try_join!(
+        consumer_task_send_heartbeat(redis_task.clone(), consumer_name.clone()),
+        consumer_task_worker(redis_task.clone(), consumer_name.clone()),
+    );
+
+    Ok(())
+}
+
+async fn consumer_task_send_heartbeat(
+    redis_task: RedisTask,
+    consumer_name: String,
+) -> Result<()> {
+    let mut redis_conn = redis_task.pool.get().await?;
+    let mut shutdown_rx = redis_task.shutdown_rx.clone();
+    let mut interval = tokio::time::interval(Duration::from_secs(1));
+    let heartbeat_key = "rust_backend_consumers:heartbeat";
+
+    loop {
+        tokio::select! {
+            // 如果收到shutdown信号，则直接退出
+            _ = shutdown_rx.changed() => {
+              if *shutdown_rx.borrow() {
+                  break;
+              }
+            }
+          _ = interval.tick() => {
+                // 更新心跳时间戳
+                redis_conn.hset(heartbeat_key, &consumer_name, "").await?;
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -198,7 +239,7 @@ async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) 
                   Ok(_) => {}
                   Err(err) => {
                         warn!("{} xread group failed, err: {}, reconnecting...", consumer_name, err);
-                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                        tokio::time::sleep(Duration::from_secs(5)).await;
                         match redis_task.pool.get().await {
                             Ok(conn) => redis_conn = conn,
                             Err(err) => {
@@ -268,7 +309,7 @@ async fn consume_redis_message(
             .iter()
             .map(|id| consume_single_redis_message(redis_task, id))
             .collect::<Vec<_>>();
-        
+
         // 并行处理任务，加快处理速度
         iter(tasks).buffer_unordered(5).collect::<Vec<_>>().await;
 
@@ -293,11 +334,11 @@ async fn consume_redis_message(
 }
 
 /// 处理单个Redis消息
-/// 
+///
 /// 处理要求：
 /// 1. 消息必须是String类型
 /// 2. 消息必须能转换为utf-8字符串
-/// 
+///
 /// 这样才会把对应的String交给 [`RedisTask`]中的`handler`来处理。
 async fn consume_single_redis_message(redis_task: &RedisTask, stream_id: &StreamId) {
     if let Some(Value::BulkString(data)) = stream_id.map.get(MESSAGE_KEY) {
