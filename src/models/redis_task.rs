@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use color_eyre::Result;
 use deadpool_redis::Pool;
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use tokio::sync::watch::Receiver;
 
@@ -14,8 +15,8 @@ pub struct RedisTask {
     /// Redis流名称
     pub stream_name: String,
 
-    /// Redis消费者名称
-    pub consumer_name: String,
+    /// Redis消费者名称模板(不包含消费者索引ID)
+    pub consumer_name_template: String,
 
     /// Redis数据库连接池
     pub pool: Pool,
@@ -29,11 +30,24 @@ pub struct RedisTask {
     pub handler: Box<dyn RedisHandler>,
 }
 
+/// Redis消费者心跳信息
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RedisConsumerHeartBeat<'a> {
+    /// Redis流名称
+    pub stream_name: &'a str,
+
+    /// Redis消费者名称
+    pub consumer_name: &'a str,
+
+    /// 此消费者上次心跳时间
+    pub last_heartbeat: i64,
+}
+
 impl Debug for RedisTask {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RedisTask")
             .field("stream_name", &self.stream_name)
-            .field("consumer_name", &self.consumer_name)
+            .field("consumer_name", &self.consumer_name_template)
             .field("pool", &self.pool)
             .field("shutdown_rx", &self.shutdown_rx)
             .finish()
@@ -49,7 +63,7 @@ impl Clone for RedisTask {
     fn clone(&self) -> Self {
         Self {
             stream_name: self.stream_name.clone(),
-            consumer_name: self.consumer_name.clone(),
+            consumer_name_template: self.consumer_name_template.clone(),
             pool: self.pool.clone(),
             shutdown_rx: self.shutdown_rx.clone(),
             handler: self.handler.clone_handler(),

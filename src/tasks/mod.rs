@@ -5,7 +5,7 @@
 pub mod task;
 
 use crate::models::config::AppConfig;
-use crate::models::redis_task::RedisTask;
+use crate::models::redis_task::{RedisConsumerHeartBeat, RedisTask};
 use crate::tasks::task::TaskCreator;
 use color_eyre::eyre::Context;
 use color_eyre::Result;
@@ -17,6 +17,7 @@ use redis::streams::{StreamId, StreamReadOptions, StreamReadReply};
 use redis::{AsyncCommands, RedisError, RedisResult, Value};
 use std::sync::Arc;
 use std::time::Duration;
+use time::OffsetDateTime;
 use tokio::sync::watch::Receiver;
 use tokio::try_join;
 use tracing::{debug, error, info, warn};
@@ -82,7 +83,7 @@ pub async fn start_job_consumers(
         stream_name: "example_task_stream".to_string(),
         pool: pool.clone(),
         shutdown_rx: shutdown_rx.clone(),
-        consumer_name: "task_consumer".to_string(),
+        consumer_name_template: "task_consumer".to_string(),
         handler: Box::new(TaskCreator),
     };
 
@@ -132,18 +133,15 @@ async fn start_create_task_consumers(
     // 这几个消费者会并行从redis读取消息并消费。
     let consumers: Vec<_> = (0..app_config.redis.max_consumer_count)
         .map(|i| {
-            let consumer_name = format!("{}_{}", redis_task.consumer_name, i);
-            consumer_task_worker_with_heartbeat(
-                redis_task.clone(),
-                consumer_name,
-            )
+            let consumer_name = format!("{}_{}", redis_task.consumer_name_template, i);
+            consumer_task_worker_with_heartbeat(redis_task.clone(), consumer_name)
         })
         .collect();
 
     // 有任何一个消费者创建失败，则返回失败，让上层进行重试
     try_join_all(consumers).await.context(format!(
         "wait for all consumer [{}] end",
-        redis_task.consumer_name
+        redis_task.consumer_name_template
     ))?;
 
     Ok(())
@@ -182,13 +180,10 @@ async fn consumer_task_worker_with_heartbeat(
     Ok(())
 }
 
-async fn consumer_task_send_heartbeat(
-    redis_task: RedisTask,
-    consumer_name: String,
-) -> Result<()> {
+async fn consumer_task_send_heartbeat(redis_task: RedisTask, consumer_name: String) -> Result<()> {
     let mut redis_conn = redis_task.pool.get().await?;
     let mut shutdown_rx = redis_task.shutdown_rx.clone();
-    let mut interval = tokio::time::interval(Duration::from_secs(1));
+    let mut interval = tokio::time::interval(Duration::from_secs(5));
     let heartbeat_key = "rust_backend_consumers:heartbeat";
 
     loop {
@@ -200,8 +195,18 @@ async fn consumer_task_send_heartbeat(
               }
             }
           _ = interval.tick() => {
-                // 更新心跳时间戳
-                redis_conn.hset(heartbeat_key, &consumer_name, "").await?;
+                let redis_heartbeat = RedisConsumerHeartBeat {
+                    stream_name: &redis_task.stream_name,
+                    consumer_name: &consumer_name,
+                    last_heartbeat: OffsetDateTime::now_utc().unix_timestamp(),
+                };
+
+                if let Ok(json_data) = serde_json::to_string(&redis_heartbeat) {
+                    let res :Result<(), RedisError> = redis_conn.hset(heartbeat_key, &consumer_name, json_data).await;
+                    if let Err(err) = res {
+                        warn!("Consumer {} redis heartbeat error: {}", consumer_name, err);
+                    }
+                }
             }
         }
     }
