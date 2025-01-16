@@ -32,12 +32,12 @@ pub struct RedisTask {
 
 /// Redis消费者心跳信息
 #[derive(Debug, Serialize, Deserialize)]
-pub struct RedisConsumerHeartBeat<'a> {
+pub struct RedisConsumerHeartBeat {
     /// Redis流名称
-    pub stream_name: &'a str,
+    pub stream_name: String,
 
     /// Redis消费者名称
-    pub consumer_name: &'a str,
+    pub consumer_name: String,
 
     /// 此消费者上次心跳时间
     pub last_heartbeat: i64,

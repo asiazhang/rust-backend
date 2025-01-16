@@ -196,8 +196,8 @@ async fn consumer_task_send_heartbeat(redis_task: RedisTask, consumer_name: Stri
             }
           _ = interval.tick() => {
                 let redis_heartbeat = RedisConsumerHeartBeat {
-                    stream_name: &redis_task.stream_name,
-                    consumer_name: &consumer_name,
+                    stream_name: redis_task.stream_name.clone(),
+                    consumer_name: consumer_name.clone(),
                     last_heartbeat: OffsetDateTime::now_utc().unix_timestamp(),
                 };
 
