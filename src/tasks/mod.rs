@@ -20,7 +20,7 @@ use std::time::Duration;
 use time::OffsetDateTime;
 use tokio::sync::watch::Receiver;
 use tokio::try_join;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 /// 启动redis消费者
 ///
@@ -202,6 +202,7 @@ async fn consumer_task_send_heartbeat(redis_task: RedisTask, consumer_name: Stri
                 };
 
                 if let Ok(json_data) = serde_json::to_string(&redis_heartbeat) {
+                    trace!("Sending heartbeat to Redis: {}", json_data);
                     let res :Result<(), RedisError> = redis_conn.hset(heartbeat_key, &consumer_name, json_data).await;
                     if let Err(err) = res {
                         warn!("Consumer {} redis heartbeat error: {}", consumer_name, err);
