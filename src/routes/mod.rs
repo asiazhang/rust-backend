@@ -5,7 +5,6 @@
 //! 用户可以在导出路由时传入共享数据 shared_state，这样所有路由函数都可以访问。
 
 use crate::models::app::AppState;
-use crate::models::config::AppConfig;
 use crate::routes::projects::__path_create_project;
 use crate::routes::projects::__path_delete_project;
 use crate::routes::projects::__path_find_projects;
@@ -21,8 +20,8 @@ use crate::routes::users::__path_get_user;
 use crate::routes::users::__path_update_user;
 use crate::routes::users::{create_user, delete_user, find_users, get_user, update_user};
 use axum::Router;
-use color_eyre::eyre::Context;
 use color_eyre::Result;
+use sqlx::{Pool, Postgres};
 use std::sync::Arc;
 use tokio::signal;
 use tokio::sync::watch::Sender;
@@ -35,20 +34,7 @@ use utoipa_scalar::{Scalar, Servable};
 pub mod projects;
 pub mod users;
 
-pub async fn start_axum_server(
-    app_config: Arc<AppConfig>,
-    shutdown_tx: Sender<bool>,
-) -> Result<()> {
-    // 创建postgres数据库连接池
-    // 使用默认配置，如果有调整需要可参考sqlx文档
-    // 注意：pool已经是一个智能指针了，所以可以使用.clone()安全跨线程使用
-    let pool = sqlx::PgPool::connect(&app_config.postgresql_conn_str)
-        .await
-        .context("Connect to postgresql database")?;
-    
-    info!("Starting migrating database...");
-    sqlx::migrate!().run(&pool).await?;
-
+pub async fn start_axum_server(pool: Pool<Postgres>, shutdown_tx: Sender<bool>) -> Result<()> {
     // 使用官方推荐的[共享状态方式](https://docs.rs/axum/latest/axum/#sharing-state-with-handlers)来在
     // 不同的web处理器之间同步，主要是需要共享数据库连接池
     let shared_state = Arc::new(AppState { db_pool: pool });

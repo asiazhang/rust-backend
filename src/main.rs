@@ -13,6 +13,7 @@ use crate::crons::start_cron_tasks;
 use crate::models::config::AppConfig;
 use crate::routes::start_axum_server;
 use crate::tasks::start_job_consumers;
+use color_eyre::eyre::Context;
 use color_eyre::Result;
 use tokio::try_join;
 use tracing::info;
@@ -37,14 +38,24 @@ async fn main() -> Result<()> {
 
     // 加载配置数据（从环境变量或者本地的.env文件）
     let conf = AppConfig::load()?;
-    
+
+    // 创建postgres数据库连接池
+    // 使用默认配置，如果有调整需要可参考sqlx文档
+    // 注意：pool已经是一个智能指针了，所以可以使用.clone()安全跨线程使用
+    let pool = sqlx::PgPool::connect(&conf.postgresql_conn_str)
+        .await
+        .context("Connect to postgresql database")?;
+
+    info!("Starting migrating database...");
+    sqlx::migrate!().run(&pool).await?;
+
     // 优雅退出通知机制，通过watch来通知需要感知的协程优雅退出
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
     // 如果有任何一个服务启动失败，那么应该会退出并打印错误信息
     _ = try_join!(
         // 启动web-api服务
-        start_axum_server(conf.clone(), shutdown_tx),
+        start_axum_server(pool.clone(), shutdown_tx),
         // 启动redis-consumer服务
         start_job_consumers(conf.clone(), shutdown_rx.clone()),
         // 启动cron-jobs服务
