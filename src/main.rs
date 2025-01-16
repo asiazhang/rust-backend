@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
 
     // 加载配置数据（从环境变量或者本地的.env文件）
     let conf = AppConfig::load()?;
-
+    
     // 优雅退出通知机制，通过watch来通知需要感知的协程优雅退出
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 

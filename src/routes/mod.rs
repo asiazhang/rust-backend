@@ -45,6 +45,9 @@ pub async fn start_axum_server(
     let pool = sqlx::PgPool::connect(&app_config.postgresql_conn_str)
         .await
         .context("Connect to postgresql database")?;
+    
+    info!("Starting migrating database...");
+    sqlx::migrate!().run(&pool).await?;
 
     // 使用官方推荐的[共享状态方式](https://docs.rs/axum/latest/axum/#sharing-state-with-handlers)来在
     // 不同的web处理器之间同步，主要是需要共享数据库连接池
