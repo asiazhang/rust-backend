@@ -48,8 +48,8 @@ async fn main() -> Result<()> {
         .min_connections(10)
         .max_connections(40)
         .acquire_timeout(Duration::from_secs(3))
-        .idle_timeout(Duration::from_secs(60 * 10))
-        .max_lifetime(Duration::from_secs(60 * 60))
+        .idle_timeout(Duration::from_secs(3600))
+        .max_lifetime(Duration::from_secs(3600*6))
         .connect(&conf.postgresql_conn_str)
         .await
         .context("Connect to postgresql database")?;
