@@ -15,6 +15,8 @@ use crate::routes::start_axum_server;
 use crate::tasks::start_job_consumers;
 use color_eyre::eyre::Context;
 use color_eyre::Result;
+use sqlx::postgres::PgPoolOptions;
+use std::time::Duration;
 use tokio::try_join;
 use tracing::info;
 
@@ -42,7 +44,13 @@ async fn main() -> Result<()> {
     // 创建postgres数据库连接池
     // 使用默认配置，如果有调整需要可参考sqlx文档
     // 注意：pool已经是一个智能指针了，所以可以使用.clone()安全跨线程使用
-    let pool = sqlx::PgPool::connect(&conf.postgresql_conn_str)
+    let pool = PgPoolOptions::new()
+        .min_connections(10)
+        .max_connections(40)
+        .acquire_timeout(Duration::from_secs(3))
+        .idle_timeout(Duration::from_secs(60 * 10))
+        .max_lifetime(Duration::from_secs(60 * 60))
+        .connect(&conf.postgresql_conn_str)
         .await
         .context("Connect to postgresql database")?;
 
