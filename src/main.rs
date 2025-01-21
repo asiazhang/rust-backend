@@ -97,26 +97,25 @@ async fn start_shutdown_signal(shutdown_tx: Sender<bool>) -> Result<()> {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
-            .expect("failed to install Ctrl+C handler");
+            .context("failed to install Ctrl+C handler")
     };
 
     // unix下同时监听SIGTERM信号
     #[cfg(unix)]
     let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
+        let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
+            .context("Failed to install SIGTERM handler")?;
+        Ok::<_, color_eyre::Report>(sigterm.recv().await)
     };
 
     // windows下没有SIGTERM，忽略
     #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
+    let terminate = std::future::pending::<Result<Option<()>>>();
 
     // 只要有监听到任何退出信号，就结束select!监听
     tokio::select! {
-        _ = ctrl_c => {info!("Received Ctrl+C, initiating shutdown...");},
-        _ = terminate => {info!("Received SIGTERM, initiating shutdown...");},
+        result = ctrl_c => {result?; info!("Received Ctrl+C, initiating shutdown...");},
+        result = terminate => {result?; info!("Received SIGTERM, initiating shutdown...");},
     }
 
     // 发送关闭信号，通知其他模块退出
