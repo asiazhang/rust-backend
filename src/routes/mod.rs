@@ -23,8 +23,7 @@ use axum::Router;
 use color_eyre::Result;
 use sqlx::{Pool, Postgres};
 use std::sync::Arc;
-use tokio::signal;
-use tokio::sync::watch::Sender;
+use tokio::sync::watch::{Receiver};
 use tracing::info;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
@@ -34,7 +33,10 @@ use utoipa_scalar::{Scalar, Servable};
 pub mod projects;
 pub mod users;
 
-pub async fn start_axum_server(pool: Pool<Postgres>, shutdown_tx: Sender<bool>) -> Result<()> {
+pub async fn start_axum_server(
+    pool: Pool<Postgres>,
+    mut shutdown_rx: Receiver<bool>,
+) -> Result<()> {
     // 使用官方推荐的[共享状态方式](https://docs.rs/axum/latest/axum/#sharing-state-with-handlers)来在
     // 不同的web处理器之间同步，主要是需要共享数据库连接池
     let shared_state = Arc::new(AppState { db_pool: pool });
@@ -47,7 +49,13 @@ pub async fn start_axum_server(pool: Pool<Postgres>, shutdown_tx: Sender<bool>) 
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
 
     axum::serve(listener, router.into_make_service())
-        .with_graceful_shutdown(shutdown_signal(shutdown_tx))
+        // 设置优雅退出处理器，当后面的shutdown_signal异步操作结束后，axum也退出
+        .with_graceful_shutdown(async move {
+            shutdown_rx
+                .changed()
+                .await
+                .expect("Failed to receive shutdown signal");
+        })
         .await?;
 
     Ok(())
@@ -126,31 +134,4 @@ Rust后端例子，覆盖场景：
 
     // 合并文档路由，用户可通过 /docs 访问文档网页地址
     router.merge(Scalar::with_url("/docs", api))
-}
-
-async fn shutdown_signal(shutdown_tx: Sender<bool>) {
-    let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-    };
-
-    #[cfg(unix)]
-    let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
-
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c => {info!("Received Ctrl+C, initiating shutdown...");},
-        _ = terminate => {info!("Received SIGTERM, initiating shutdown...");},
-    }
-
-    // 发送关闭信号
-    shutdown_tx.send(true).expect("Failed to send signal");
 }
