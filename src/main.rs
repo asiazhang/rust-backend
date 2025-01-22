@@ -55,6 +55,7 @@ async fn main() -> Result<()> {
         .idle_timeout(Duration::from_secs(3600))
         // 6小时强制释放，避免长时间链接导致数据库问题
         .max_lifetime(Duration::from_secs(3600 * 6))
+        .test_before_acquire(true)
         .connect(&conf.postgresql_conn_str)
         .await
         .context("Connect to postgresql database")?;
