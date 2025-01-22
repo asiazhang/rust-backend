@@ -187,6 +187,11 @@ async fn consumer_task_send_heartbeat(redis_task: RedisTask, consumer_name: Stri
     let heartbeat_key = "rust_backend_consumers:heartbeat";
 
     loop {
+        // 避免初始状态已经是true导致无法退出
+        if *shutdown_rx.borrow() {
+            break;
+        }
+
         tokio::select! {
             // 如果收到shutdown信号，则直接退出
             _ = shutdown_rx.changed() => {
@@ -232,6 +237,11 @@ async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) 
     let mut shutdown_rx = redis_task.shutdown_rx.clone();
 
     loop {
+        // 避免初始状态已经是true导致无法退出
+        if *shutdown_rx.borrow() {
+            break;
+        }
+
         tokio::select! {
             // 如果收到shutdown信号，则直接退出
           _ = shutdown_rx.changed() => {
