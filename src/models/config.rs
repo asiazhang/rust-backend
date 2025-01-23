@@ -1,7 +1,9 @@
 use color_eyre::eyre::Context;
 use color_eyre::{Help, Result};
 use std::sync::Arc;
+use validator::Validate;
 
+#[derive(Validate, Debug)]
 pub struct RedisConfig {
     /// redis链接字符串
     pub redis_conn_str: String,
@@ -9,6 +11,7 @@ pub struct RedisConfig {
     /// redis pool的大小
     /// 需要根据下面的max_consumer_count来配置
     /// 可通过环境变量 `MAX_REDIS_POOL_SIZE` 来调整
+    #[validate(range(min = 10, max = 100))]
     pub max_redis_pool_size: usize,
 
     /// 每个类型的任务最多启动的consumer个数
@@ -17,15 +20,18 @@ pub struct RedisConfig {
     /// 最终需要的pool_size > 10
     ///
     /// 可通过环境变量 `MAX_CONSUMER_COUNT` 来调整
+    #[validate(range(min = 1, max = 30))]
     pub max_consumer_count: usize,
 }
 
 /// 程序配置
+#[derive(Validate, Debug)]
 pub struct AppConfig {
     /// postgresql数据库链接字符串
     pub postgresql_conn_str: String,
 
     /// redis配置
+    #[validate(nested)]
     pub redis: RedisConfig,
 }
 
@@ -54,6 +60,11 @@ impl AppConfig {
                     .map_or(16, |s| s.parse().unwrap_or(16)),
             },
         };
+
+        config
+            .validate()
+            .context(format!("Validate app config: {:?}", config))?;
+
         Ok(Arc::new(config))
     }
 }

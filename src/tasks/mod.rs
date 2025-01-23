@@ -26,7 +26,7 @@ use tracing::{debug, error, info, trace, warn};
 ///
 /// ## 参数说明
 /// - `app_config`: 程序配置
-/// - `rx`: 用于接收关闭信号
+/// - `shutdown_rx`: 用于接收关闭信号
 ///
 /// ## 通用处理
 ///
@@ -38,8 +38,8 @@ use tracing::{debug, error, info, trace, warn};
 /// 用户一般这样使用：
 ///
 /// ```rust
-/// let info1 = RedisTask {handler: Box::new(Task1), ...}
-/// let info2 = RedisTask {handler: Box::new(Task2), ...}
+/// let info1 = RedisTask {handler: Arc::new(Task1), ...}
+/// let info2 = RedisTask {handler: Arc::new(Task2), ...}
 ///
 /// try_join!(
 ///     start_create_task_consumers(app_config, info1),
@@ -110,6 +110,7 @@ async fn guard_start_create_task_consumers(
     shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
     loop {
+        // 只要不是收到shutdown信号，则一直循环执行，避免中途redis执行出错导致消费者退出
         let re = start_create_task_consumers(
             Arc::clone(&app_config),
             Arc::clone(&redis_task),
@@ -119,8 +120,8 @@ async fn guard_start_create_task_consumers(
         match re {
             Ok(_) => break, // OK表示收到shutdown信号，正常退出
             Err(err) => {
-                warn!("Failed to start create task consumers, retrying...");
                 warn!("{}", err);
+                warn!("Failed to start create task consumers, retrying...");
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
         }
@@ -130,6 +131,10 @@ async fn guard_start_create_task_consumers(
 }
 
 /// 并发启动新建任务的redis消费者
+///
+/// 为了提升效率，我们这里会在同一个消费组中启动多个消费者，并行处理消息。
+/// 用户可通过配置 `MAX_CONSUMER_COUNT` 环境变量来设置并发程度
+///
 async fn start_create_task_consumers(
     app_config: Arc<AppConfig>,
     redis_task: Arc<RedisTask>,
@@ -180,6 +185,13 @@ async fn create_task_group(redis_task: &RedisTask) -> Result<()> {
     Ok(())
 }
 
+/// 启动一个带心跳发送的Redis消费者
+///
+/// 使用心跳主要是避免以下问题：
+/// - 用户调整Redis消费者数目，导致部分消息一直pending无法处理
+/// - 部分消费者由于某些原因导致无法处理消息，进而导致部分消息一直pending无法处理
+///
+/// 通过记录心跳消息，我们能检测到哪些消费者已经失效，就可以将发给此消费者的信息重平衡到其他消费者
 async fn consumer_task_worker_with_heartbeat(
     redis_task: Arc<RedisTask>,
     consumer_name: String,
@@ -196,11 +208,12 @@ async fn consumer_task_worker_with_heartbeat(
             consumer_name.clone(),
             shutdown_rx.clone()
         ),
-    );
+    ).context(format!("Creating consumer {} with auto heartbeat", consumer_name)) ?;
 
     Ok(())
 }
 
+/// 定时发送心跳消息
 async fn consumer_task_send_heartbeat(
     redis_task: Arc<RedisTask>,
     consumer_name: String,
