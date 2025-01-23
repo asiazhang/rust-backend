@@ -91,7 +91,7 @@ pub async fn start_job_consumers(
     // 统一调用 `guard_start_create_task_consumers(app_config.clone(), xxx)`
     try_join!(guard_start_create_task_consumers(
         app_config.clone(),
-        create_task_info
+        Arc::new(create_task_info)
     ))?;
 
     info!("Redis job consumers stopped");
@@ -106,15 +106,16 @@ const GROUP_NAME: &str = "rust-backend";
 /// 只要是失败的场景，则一直不停重试，确保消费者不退出
 async fn guard_start_create_task_consumers(
     app_config: Arc<AppConfig>,
-    redis_task: RedisTask,
+    redis_task: Arc<RedisTask>,
 ) -> Result<()> {
     loop {
         let re = start_create_task_consumers(app_config.clone(), redis_task.clone()).await;
         match re {
             Ok(_) => break, // OK表示收到shutdown信号，正常退出
-            Err(_) => {
+            Err(err) => {
                 warn!("Failed to start create task consumers, retrying...");
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                warn!("{}", err);
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
         }
     }
@@ -125,7 +126,7 @@ async fn guard_start_create_task_consumers(
 /// 并发启动新建任务的redis消费者
 async fn start_create_task_consumers(
     app_config: Arc<AppConfig>,
-    redis_task: RedisTask,
+    redis_task: Arc<RedisTask>,
 ) -> Result<()> {
     create_task_group(&redis_task).await?;
 
@@ -169,7 +170,7 @@ async fn create_task_group(redis_task: &RedisTask) -> Result<()> {
 }
 
 async fn consumer_task_worker_with_heartbeat(
-    redis_task: RedisTask,
+    redis_task: Arc<RedisTask>,
     consumer_name: String,
 ) -> Result<()> {
     _ = try_join!(
@@ -180,7 +181,10 @@ async fn consumer_task_worker_with_heartbeat(
     Ok(())
 }
 
-async fn consumer_task_send_heartbeat(redis_task: RedisTask, consumer_name: String) -> Result<()> {
+async fn consumer_task_send_heartbeat(
+    redis_task: Arc<RedisTask>,
+    consumer_name: String,
+) -> Result<()> {
     let mut redis_conn = redis_task.pool.get().await?;
     let mut shutdown_rx = redis_task.shutdown_rx.clone();
     let mut interval = tokio::time::interval(Duration::from_secs(5));
@@ -220,7 +224,7 @@ async fn consumer_task_send_heartbeat(redis_task: RedisTask, consumer_name: Stri
     Ok(())
 }
 
-async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) -> Result<()> {
+async fn consumer_task_worker(redis_task: Arc<RedisTask>, consumer_name: String) -> Result<()> {
     debug!("Redis job consumer {} started", consumer_name);
 
     let mut redis_conn = redis_task.pool.get().await?;
@@ -250,7 +254,7 @@ async fn consumer_task_worker(mut redis_task: RedisTask, consumer_name: String) 
               }
           }
             // 没有收到shutdown信号，则读取redis消息并处理
-          result = xread_group(&mut redis_conn,&streams,&opts,&mut redis_task) => {
+          result = xread_group(&mut redis_conn,&streams,&opts,&redis_task) => {
               match result {
                   Ok(_) => {}
                   Err(err) => {
@@ -292,7 +296,7 @@ async fn xread_group(
     conn: &mut Connection,
     streams: &[String],
     opts: &StreamReadOptions,
-    redis_task: &mut RedisTask,
+    redis_task: &Arc<RedisTask>,
 ) -> Result<()> {
     // 先处理pending数据
     let pending_msg = conn
@@ -312,7 +316,7 @@ async fn xread_group(
 async fn consume_redis_message(
     conn: &mut Connection,
     reply: StreamReadReply,
-    redis_task: &RedisTask,
+    redis_task: &Arc<RedisTask>,
 ) -> Result<()> {
     for key in reply.keys {
         // 为空不处理，避免后续多余操作
@@ -323,7 +327,7 @@ async fn consume_redis_message(
         let tasks = key
             .ids
             .iter()
-            .map(|id| consume_single_redis_message(redis_task, id))
+            .map(|id| consume_single_redis_message(redis_task.clone(), id))
             .collect::<Vec<_>>();
 
         // 并行处理任务，加快处理速度
@@ -356,7 +360,7 @@ async fn consume_redis_message(
 /// 2. 消息必须能转换为utf-8字符串
 ///
 /// 这样才会把对应的String交给 [`RedisTask`]中的`handler`来处理。
-async fn consume_single_redis_message(redis_task: &RedisTask, stream_id: &StreamId) {
+async fn consume_single_redis_message(redis_task: Arc<RedisTask>, stream_id: &StreamId) {
     if let Some(Value::BulkString(data)) = stream_id.map.get(MESSAGE_KEY) {
         if let Ok(raw) = String::from_utf8(data.to_vec()) {
             if let Err(err) = redis_task.handler.handle_task(raw).await {

@@ -54,30 +54,10 @@ impl Debug for RedisTask {
     }
 }
 
-/// 由于[`RedisTask`]需要在多个协程中并发执行，因此最好的方式是实现Clone特征
-/// 这样就避免数据竞争问题。
-///
-/// 在其他语言中，并发访问并不会检查所有权（比如`go`/`java`/`c++`/...），可能会遇到难以定位的数据竞争问题
-/// Rust虽然复杂了些，但是语言模型保证了不会出现数据竞争。
-impl Clone for RedisTask {
-    fn clone(&self) -> Self {
-        Self {
-            stream_name: self.stream_name.clone(),
-            consumer_name_template: self.consumer_name_template.clone(),
-            pool: self.pool.clone(),
-            shutdown_rx: self.shutdown_rx.clone(),
-            handler: self.handler.clone_handler(),
-        }
-    }
-}
-
 /// 异步Redis处理器特征
 ///
 /// 由于[`RedisHandler`]需要async move到协程中，因此需要实现线程安全的[`Send`]和[`Sync`]
 #[async_trait]
 pub trait RedisHandler: Send + Sync {
     async fn handle_task(&self, task: String) -> Result<()>;
-
-    // 添加克隆方法
-    fn clone_handler(&self) -> Box<dyn RedisHandler>;
 }

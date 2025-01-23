@@ -20,8 +20,4 @@ impl RedisHandler for TaskCreator {
 
         Ok(())
     }
-
-    fn clone_handler(&self) -> Box<dyn RedisHandler> {
-        Box::new(TaskCreator {})
-    }
 }

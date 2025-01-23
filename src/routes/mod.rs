@@ -23,7 +23,7 @@ use axum::Router;
 use color_eyre::Result;
 use sqlx::{Pool, Postgres};
 use std::sync::Arc;
-use tokio::sync::watch::{Receiver};
+use tokio::sync::watch::Receiver;
 use tracing::info;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;

@@ -120,7 +120,9 @@ async fn start_shutdown_signal(shutdown_tx: Sender<bool>) -> Result<()> {
     }
 
     // 发送关闭信号，通知其他模块退出
-    shutdown_tx.send(true).context("Failed to send shutdown signal")?;
+    shutdown_tx
+        .send(true)
+        .context("Failed to send shutdown signal")?;
 
     Ok(())
 }
