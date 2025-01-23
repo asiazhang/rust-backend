@@ -3,7 +3,7 @@ use color_eyre::Result;
 use deadpool_redis::Pool;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use tokio::sync::watch::Receiver;
+use std::sync::Arc;
 
 /// Redis消费者任务信息
 ///
@@ -21,13 +21,10 @@ pub struct RedisTask {
     /// Redis数据库连接池
     pub pool: Pool,
 
-    /// 系统关闭的型号
-    pub shutdown_rx: Receiver<bool>,
-
     /// Redis消息处理器
     ///
     /// 这是一个动态的处理器，需要符合 [`RedisHandler`] 特征
-    pub handler: Box<dyn RedisHandler>,
+    pub handler: Arc<dyn RedisHandler>,
 }
 
 /// Redis消费者心跳信息
@@ -49,7 +46,6 @@ impl Debug for RedisTask {
             .field("stream_name", &self.stream_name)
             .field("consumer_name", &self.consumer_name_template)
             .field("pool", &self.pool)
-            .field("shutdown_rx", &self.shutdown_rx)
             .finish()
     }
 }

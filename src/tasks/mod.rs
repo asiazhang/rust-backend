@@ -82,16 +82,16 @@ pub async fn start_job_consumers(
     let create_task_info = RedisTask {
         stream_name: "example_task_stream".to_string(),
         pool: pool.clone(),
-        shutdown_rx: shutdown_rx.clone(),
         consumer_name_template: "task_consumer".to_string(),
-        handler: Box::new(TaskCreator),
+        handler: Arc::new(TaskCreator),
     };
 
     // NOTE: 如果有其他需要处理的Redis类型，那么按照👆的例子来编写
     // 统一调用 `guard_start_create_task_consumers(app_config.clone(), xxx)`
     try_join!(guard_start_create_task_consumers(
-        app_config.clone(),
-        Arc::new(create_task_info)
+        Arc::clone(&app_config),
+        Arc::new(create_task_info),
+        shutdown_rx
     ))?;
 
     info!("Redis job consumers stopped");
@@ -107,9 +107,15 @@ const GROUP_NAME: &str = "rust-backend";
 async fn guard_start_create_task_consumers(
     app_config: Arc<AppConfig>,
     redis_task: Arc<RedisTask>,
+    shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
     loop {
-        let re = start_create_task_consumers(app_config.clone(), redis_task.clone()).await;
+        let re = start_create_task_consumers(
+            Arc::clone(&app_config),
+            Arc::clone(&redis_task),
+            shutdown_rx.clone(),
+        )
+        .await;
         match re {
             Ok(_) => break, // OK表示收到shutdown信号，正常退出
             Err(err) => {
@@ -127,6 +133,7 @@ async fn guard_start_create_task_consumers(
 async fn start_create_task_consumers(
     app_config: Arc<AppConfig>,
     redis_task: Arc<RedisTask>,
+    shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
     create_task_group(&redis_task).await?;
 
@@ -135,7 +142,11 @@ async fn start_create_task_consumers(
     let consumers: Vec<_> = (0..app_config.redis.max_consumer_count)
         .map(|i| {
             let consumer_name = format!("{}_{}", redis_task.consumer_name_template, i);
-            consumer_task_worker_with_heartbeat(redis_task.clone(), consumer_name)
+            consumer_task_worker_with_heartbeat(
+                Arc::clone(&redis_task),
+                consumer_name,
+                shutdown_rx.clone(),
+            )
         })
         .collect();
 
@@ -172,10 +183,19 @@ async fn create_task_group(redis_task: &RedisTask) -> Result<()> {
 async fn consumer_task_worker_with_heartbeat(
     redis_task: Arc<RedisTask>,
     consumer_name: String,
+    shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
     _ = try_join!(
-        consumer_task_send_heartbeat(redis_task.clone(), consumer_name.clone()),
-        consumer_task_worker(redis_task.clone(), consumer_name.clone()),
+        consumer_task_send_heartbeat(
+            Arc::clone(&redis_task),
+            consumer_name.clone(),
+            shutdown_rx.clone()
+        ),
+        consumer_task_worker(
+            Arc::clone(&redis_task),
+            consumer_name.clone(),
+            shutdown_rx.clone()
+        ),
     );
 
     Ok(())
@@ -184,9 +204,9 @@ async fn consumer_task_worker_with_heartbeat(
 async fn consumer_task_send_heartbeat(
     redis_task: Arc<RedisTask>,
     consumer_name: String,
+    mut shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
     let mut redis_conn = redis_task.pool.get().await?;
-    let mut shutdown_rx = redis_task.shutdown_rx.clone();
     let mut interval = tokio::time::interval(Duration::from_secs(5));
     let heartbeat_key = "rust_backend_consumers:heartbeat";
 
@@ -224,7 +244,11 @@ async fn consumer_task_send_heartbeat(
     Ok(())
 }
 
-async fn consumer_task_worker(redis_task: Arc<RedisTask>, consumer_name: String) -> Result<()> {
+async fn consumer_task_worker(
+    redis_task: Arc<RedisTask>,
+    consumer_name: String,
+    shutdown_rx: Receiver<bool>,
+) -> Result<()> {
     debug!("Redis job consumer {} started", consumer_name);
 
     let mut redis_conn = redis_task.pool.get().await?;
@@ -238,7 +262,7 @@ async fn consumer_task_worker(redis_task: Arc<RedisTask>, consumer_name: String)
     // 这里必须要把shutdown_rx克隆一次
     // 否则在[`select!`]多个分支中，都会访问到 &mut redis_task
     // 这样会违反redis的借用原则（mut借用在作用域里面只能有一个）
-    let mut shutdown_rx = redis_task.shutdown_rx.clone();
+    let mut shutdown_rx = shutdown_rx.clone();
 
     loop {
         // 避免初始状态已经是true导致无法退出
@@ -327,7 +351,7 @@ async fn consume_redis_message(
         let tasks = key
             .ids
             .iter()
-            .map(|id| consume_single_redis_message(redis_task.clone(), id))
+            .map(|id| consume_single_redis_message(Arc::clone(redis_task), id))
             .collect::<Vec<_>>();
 
         // 并行处理任务，加快处理速度

@@ -16,6 +16,7 @@ use crate::tasks::start_job_consumers;
 use color_eyre::eyre::Context;
 use color_eyre::Result;
 use sqlx::postgres::PgPoolOptions;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch::Sender;
 use tokio::{signal, try_join};
@@ -70,9 +71,9 @@ async fn main() -> Result<()> {
     _ = try_join!(
         start_shutdown_signal(shutdown_tx),
         // 启动web-api服务
-        start_axum_server(pool.clone(), shutdown_rx.clone()),
+        start_axum_server(pool, shutdown_rx.clone()),
         // 启动redis-consumer服务
-        start_job_consumers(conf.clone(), shutdown_rx.clone()),
+        start_job_consumers(Arc::clone(&conf), shutdown_rx.clone()),
         // 启动cron-jobs服务
         start_cron_tasks(shutdown_rx.clone()),
     )?;
