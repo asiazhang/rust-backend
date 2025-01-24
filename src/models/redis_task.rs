@@ -57,3 +57,7 @@ impl Debug for RedisTask {
 pub trait RedisHandler: Send + Sync {
     async fn handle_task(&self, task: String) -> Result<()>;
 }
+
+pub trait RedisTaskCreator: Send + Sync {
+    fn new_redis_task(pool: Pool) -> Arc<RedisTask>;
+}

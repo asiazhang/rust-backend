@@ -2,11 +2,14 @@
 //!
 //! 从Redis中读取消息并处理。通常来说都会正常ack，避免消息无限投递。
 
-pub mod task;
+pub mod task_type_a;
+
+pub mod task_type_b;
 
 use crate::models::config::AppConfig;
-use crate::models::redis_task::{RedisConsumerHeartBeat, RedisTask};
-use crate::tasks::task::TaskCreator;
+use crate::models::redis_task::{RedisConsumerHeartBeat, RedisTask, RedisTaskCreator};
+use crate::tasks::task_type_a::TaskTypeACreator;
+use crate::tasks::task_type_b::TaskTypeBCreator;
 use color_eyre::eyre::Context;
 use color_eyre::Result;
 use deadpool_redis::{Config, Connection, Runtime};
@@ -78,21 +81,19 @@ pub async fn start_job_consumers(
     // 调整redis数据库连接池的大小
     pool.resize(app_config.redis.max_redis_pool_size);
 
-    // 声明需要处理的Redis类型数据
-    let create_task_info = RedisTask {
-        stream_name: "example_task_stream".to_string(),
-        pool: pool.clone(),
-        consumer_name_template: "task_consumer".to_string(),
-        handler: Arc::new(TaskCreator),
-    };
-
-    // NOTE: 如果有其他需要处理的Redis类型，那么按照👆的例子来编写
-    // 统一调用 `guard_start_create_task_consumers(app_config.clone(), xxx)`
-    try_join!(guard_start_create_task_consumers(
-        Arc::clone(&app_config),
-        Arc::new(create_task_info),
-        shutdown_rx
-    ))?;
+    // NOTE: 如果有其他需要处理的Redis类型，那么按照👇的例子来编写
+    try_join!(
+        guard_start_create_task_consumers(
+            Arc::clone(&app_config),
+            TaskTypeACreator::new_redis_task(pool.clone()),
+            shutdown_rx.clone()
+        ),
+        guard_start_create_task_consumers(
+            Arc::clone(&app_config),
+            TaskTypeBCreator::new_redis_task(pool.clone()),
+            shutdown_rx.clone()
+        )
+    )?;
 
     info!("Redis job consumers stopped");
 
@@ -208,7 +209,11 @@ async fn consumer_task_worker_with_heartbeat(
             consumer_name.clone(),
             shutdown_rx.clone()
         ),
-    ).context(format!("Creating consumer {} with auto heartbeat", consumer_name)) ?;
+    )
+    .context(format!(
+        "Creating consumer {} with auto heartbeat",
+        consumer_name
+    ))?;
 
     Ok(())
 }
