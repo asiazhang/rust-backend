@@ -12,7 +12,6 @@ pub async fn start_cron_tasks(mut shutdown_rx: tokio::sync::watch::Receiver<bool
     sched
         .add(Job::new_async("every 1 minutes", |_uuid, mut _l| {
             Box::pin(async move {
-                // TODO: 增加redis消息再平衡，避免部分消息一直不被处理
                 re_balance_redis_message().await;
             })
         })?)
