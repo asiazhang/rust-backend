@@ -20,16 +20,9 @@ pub async fn start_cron_tasks(mut shutdown_rx: tokio::sync::watch::Receiver<bool
 
     sched.start().await?;
 
-    loop {
-        if *shutdown_rx.borrow() {
-            break;
-        }
-
-        // 等待信号变化或发送端关闭
-        if shutdown_rx.changed().await.is_err() {
-            // 发送端已关闭，退出循环
-            break;
-        }
+    while *shutdown_rx.borrow() {
+        // 通过 changed() 等待信号变化，同时自动检查发送端状态
+        shutdown_rx.changed().await?;
     }
 
     sched.shutdown().await?;
