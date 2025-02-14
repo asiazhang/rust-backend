@@ -40,6 +40,8 @@ pub struct RedisConsumerHeartBeat {
     pub last_heartbeat: i64,
 }
 
+pub const HEARTBEAT_KEY: &str = "rust_backend_consumers:heartbeat";
+
 impl Debug for RedisTask {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RedisTask")

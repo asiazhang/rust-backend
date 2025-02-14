@@ -17,6 +17,7 @@ sqlx = { version = "0.8.2", features = ["macros", "migrate", "postgres", "runtim
 thiserror = "2.0.8"
 time = "0.3.37"
 tokio = { version = "1.42.0", features = ["full"] }
+tokio-cron-scheduler = { version = "0.13.0", features = ["english"] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 utoipa = { version = "5.3.0", features = ["axum_extras", "openapi_extensions", "time"] }

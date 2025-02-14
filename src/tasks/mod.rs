@@ -7,7 +7,9 @@ pub mod task_type_a;
 pub mod task_type_b;
 
 use crate::models::config::AppConfig;
-use crate::models::redis_task::{RedisConsumerHeartBeat, RedisTask, RedisTaskCreator};
+use crate::models::redis_task::{
+    RedisConsumerHeartBeat, RedisTask, RedisTaskCreator, HEARTBEAT_KEY,
+};
 use crate::tasks::task_type_a::TaskTypeACreator;
 use crate::tasks::task_type_b::TaskTypeBCreator;
 use color_eyre::eyre::Context;
@@ -226,7 +228,6 @@ async fn consumer_task_send_heartbeat(
 ) -> Result<()> {
     let mut redis_conn = redis_task.pool.get().await?;
     let mut interval = tokio::time::interval(Duration::from_secs(5));
-    let heartbeat_key = "rust_backend_consumers:heartbeat";
 
     loop {
         // 避免初始状态已经是true导致无法退出
@@ -250,7 +251,7 @@ async fn consumer_task_send_heartbeat(
 
                 if let Ok(json_data) = serde_json::to_string(&redis_heartbeat) {
                     trace!("Sending heartbeat to Redis: {}", json_data);
-                    let res :Result<(), RedisError> = redis_conn.hset(heartbeat_key, &consumer_name, json_data).await;
+                    let res :Result<(), RedisError> = redis_conn.hset(HEARTBEAT_KEY, &consumer_name, json_data).await;
                     if let Err(err) = res {
                         warn!("Consumer {} redis heartbeat error: {}", consumer_name, err);
                     }
@@ -267,7 +268,10 @@ async fn consumer_task_worker(
     consumer_name: String,
     shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
-    debug!("Redis job consumer {} started", consumer_name);
+    debug!(
+        "Redis job consumer {}-{} started",
+        redis_task.stream_name, consumer_name
+    );
 
     let mut redis_conn = redis_task.pool.get().await?;
 
@@ -314,7 +318,10 @@ async fn consumer_task_worker(
         }
     }
 
-    debug!("Redis job consumer {} ended", consumer_name);
+    debug!(
+        "Redis job consumer {}-{} ended",
+        redis_task.stream_name, consumer_name
+    );
 
     Ok(())
 }

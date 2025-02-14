@@ -15,3 +15,9 @@
 //!         - 分发完成后，删除其心跳数据
 //!     - 如果心跳正常，则什么也不做
 //!
+
+use tracing::debug;
+
+pub async fn re_balance_redis_message() {
+    debug!("Crons re-balance message");
+}
