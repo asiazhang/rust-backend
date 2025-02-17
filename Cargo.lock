@@ -406,9 +406,9 @@ dependencies = [
 
 [[package]]
 name = "deadpool-redis"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfae6799b68a735270e4344ee3e834365f707c72da09c9a8bb89b45cc3351395"
+checksum = "011ead1ec511457e06577f438fbb3a8c3de6c65c669bca9c95ed4dca6c396f6f"
 dependencies = [
  "deadpool",
  "redis",
@@ -1049,15 +1049,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "itertools"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
-dependencies = [
- "either",
-]
-
-[[package]]
 name = "itoa"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1477,16 +1468,14 @@ dependencies = [
 
 [[package]]
 name = "redis"
-version = "0.27.6"
+version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09d8f99a4090c89cc489a94833c901ead69bfbf3877b4867d5482e321ee875bc"
+checksum = "e37ec3fd44bea2ec947ba6cc7634d7999a6590aca7c35827c250bc0de502bda6"
 dependencies = [
  "arc-swap",
- "async-trait",
  "bytes",
  "combine",
  "futures-util",
- "itertools",
  "itoa",
  "num-bigint",
  "percent-encoding",
