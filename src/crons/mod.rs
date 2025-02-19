@@ -18,7 +18,7 @@ pub async fn start_cron_tasks(mut shutdown_rx: tokio::sync::watch::Receiver<bool
         .await?;
 
     sched.start().await?;
-    
+
     // 由于shutdown_rx.changed()会等待信号，因此while循环不会导致CPU空转
     while *shutdown_rx.borrow() {
         // 通过 changed() 等待信号变化，同时自动检查发送端状态
