@@ -8,16 +8,16 @@ pub mod task_type_b;
 
 use crate::models::config::AppConfig;
 use crate::models::redis_task::{
-    RedisConsumerHeartBeat, RedisTask, RedisTaskCreator, HEARTBEAT_KEY,
+    HEARTBEAT_KEY, RedisConsumerHeartBeat, RedisTask, RedisTaskCreator,
 };
 use crate::tasks::task_type_a::TaskTypeACreator;
 use crate::tasks::task_type_b::TaskTypeBCreator;
-use color_eyre::eyre::Context;
 use color_eyre::Result;
+use color_eyre::eyre::Context;
 use deadpool_redis::{Config, Connection, Runtime};
+use futures::StreamExt;
 use futures::future::try_join_all;
 use futures::stream::iter;
-use futures::StreamExt;
 use redis::streams::{StreamId, StreamReadOptions, StreamReadReply};
 use redis::{AsyncCommands, RedisError, RedisResult, Value};
 use std::sync::Arc;
