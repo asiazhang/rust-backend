@@ -12,10 +12,10 @@ use crate::tasks::task_type_a::TaskTypeACreator;
 use crate::tasks::task_type_b::TaskTypeBCreator;
 use color_eyre::eyre::Context;
 use color_eyre::Result;
-use deadpool_redis::{Config, Connection, Runtime};
 use futures::future::try_join_all;
 use futures::stream::iter;
 use futures::StreamExt;
+use redis::aio::ConnectionManager;
 use redis::streams::{StreamId, StreamReadOptions, StreamReadReply};
 use redis::{AsyncCommands, RedisError, RedisResult, Value};
 use std::sync::Arc;
@@ -74,23 +74,20 @@ pub async fn start_job_consumers(
         &app_config.redis.redis_conn_str
     );
 
-    // 使用deadpool_redis直接创建配置并生成数据库连接池
-    let cfg = Config::from_url(&app_config.redis.redis_conn_str);
-    let pool = cfg.create_pool(Some(Runtime::Tokio1))?;
-
-    // 调整redis数据库连接池的大小
-    pool.resize(app_config.redis.max_redis_pool_size);
-
     // NOTE: 如果有其他需要处理的Redis类型，那么按照👇的例子来编写
     try_join!(
         guard_start_create_task_consumers(
             Arc::clone(&app_config),
-            TaskTypeACreator::new_redis_task(pool.clone()),
+            TaskTypeACreator::new_redis_task(
+                new_redis_connection_manager(app_config.clone()).await?
+            ),
             shutdown_rx.clone()
         ),
         guard_start_create_task_consumers(
             Arc::clone(&app_config),
-            TaskTypeBCreator::new_redis_task(pool.clone()),
+            TaskTypeBCreator::new_redis_task(
+                new_redis_connection_manager(app_config.clone()).await?
+            ),
             shutdown_rx.clone()
         )
     )?;
@@ -98,6 +95,13 @@ pub async fn start_job_consumers(
     info!("Redis job consumers stopped");
 
     Ok(())
+}
+
+async fn new_redis_connection_manager(app_config: Arc<AppConfig>) -> Result<ConnectionManager> {
+    Ok(ConnectionManager::new(redis::Client::open(
+        app_config.redis.redis_conn_str.clone(),
+    )?)
+    .await?)
 }
 
 const GROUP_NAME: &str = "rust-backend";
@@ -168,15 +172,11 @@ async fn start_create_task_consumers(
 const MESSAGE_KEY: &str = "message";
 
 async fn create_task_group(redis_task: &RedisTask) -> Result<()> {
-    let mut con = redis_task
-        .pool
-        .get()
-        .await
-        .context("get redis connection from pool")?;
-
     // 创建消费组，来支持并行消费消息。
     // 由于消费组不能多次创建，因此失败了提示warning即可
-    let re: RedisResult<()> = con
+    let re: RedisResult<()> = redis_task
+        .conn
+        .clone()
         .xgroup_create_mkstream(&redis_task.stream_name, GROUP_NAME, "$")
         .await;
     if let Err(err) = re {
@@ -224,7 +224,6 @@ async fn consumer_task_send_heartbeat(
     consumer_name: String,
     mut shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
-    let mut redis_conn = redis_task.pool.get().await?;
     let mut interval = tokio::time::interval(Duration::from_secs(5));
     let heartbeat_key = "rust_backend_consumers:heartbeat";
 
@@ -250,7 +249,7 @@ async fn consumer_task_send_heartbeat(
 
                 if let Ok(json_data) = serde_json::to_string(&redis_heartbeat) {
                     trace!("Sending heartbeat to Redis: {}", json_data);
-                    let res :Result<(), RedisError> = redis_conn.hset(heartbeat_key, &consumer_name, json_data).await;
+                    let res :Result<(), RedisError> = redis_task.conn.clone().hset(heartbeat_key, &consumer_name, json_data).await;
                     if let Err(err) = res {
                         warn!("Consumer {} redis heartbeat error: {}", consumer_name, err);
                     }
@@ -269,8 +268,6 @@ async fn consumer_task_worker(
 ) -> Result<()> {
     debug!("Redis job consumer {} started", consumer_name);
 
-    let mut redis_conn = redis_task.pool.get().await?;
-
     let opts = StreamReadOptions::default()
         .group(GROUP_NAME, &consumer_name)
         .block(1000) // 最长等待时间1秒，可以满足大多数场景
@@ -283,6 +280,7 @@ async fn consumer_task_worker(
     let mut shutdown_rx = shutdown_rx.clone();
 
     loop {
+        let mut conn = redis_task.conn.clone();
         // 避免初始状态已经是true导致无法退出
         if *shutdown_rx.borrow() {
             break;
@@ -296,18 +294,12 @@ async fn consumer_task_worker(
               }
           }
             // 没有收到shutdown信号，则读取redis消息并处理
-          result = xread_group(&mut redis_conn,&streams,&opts,&redis_task) => {
+          result = xread_group(&mut conn,&streams,&opts,&redis_task) => {
               match result {
                   Ok(_) => {}
                   Err(err) => {
                         warn!("{} xread group failed, err: {}, reconnecting...", consumer_name, err);
                         tokio::time::sleep(Duration::from_secs(5)).await;
-                        match redis_task.pool.get().await {
-                            Ok(conn) => redis_conn = conn,
-                            Err(err) => {
-                                warn!("{} get redis conn from pool failed, err: {}, reconnecting...", consumer_name,err)
-                            }
-                        }
                   }
               }
           }
@@ -335,7 +327,7 @@ async fn consumer_task_worker(
 ///
 /// `>`流表示读取redis中的undelivered数据。会正常遵守block时间。
 async fn xread_group(
-    conn: &mut Connection,
+    conn: &mut redis::aio::ConnectionManager,
     streams: &[String],
     opts: &StreamReadOptions,
     redis_task: &Arc<RedisTask>,
@@ -356,7 +348,7 @@ async fn xread_group(
 }
 
 async fn consume_redis_message(
-    conn: &mut Connection,
+    conn: &mut redis::aio::ConnectionManager,
     reply: StreamReadReply,
     redis_task: &Arc<RedisTask>,
 ) -> Result<()> {

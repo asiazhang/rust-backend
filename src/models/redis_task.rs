@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use color_eyre::Result;
-use deadpool_redis::Pool;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -19,7 +18,7 @@ pub struct RedisTask {
     pub consumer_name_template: String,
 
     /// Redis数据库连接池
-    pub pool: Pool,
+    pub conn: redis::aio::ConnectionManager,
 
     /// Redis消息处理器
     ///
@@ -45,7 +44,6 @@ impl Debug for RedisTask {
         f.debug_struct("RedisTask")
             .field("stream_name", &self.stream_name)
             .field("consumer_name", &self.consumer_name_template)
-            .field("pool", &self.pool)
             .finish()
     }
 }
@@ -59,5 +57,5 @@ pub trait RedisHandler: Send + Sync {
 }
 
 pub trait RedisTaskCreator: Send + Sync {
-    fn new_redis_task(pool: Pool) -> Arc<RedisTask>;
+    fn new_redis_task(conn: redis::aio::ConnectionManager) -> Arc<RedisTask>;
 }
