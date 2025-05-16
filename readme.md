@@ -17,3 +17,11 @@
 - [dotenvy](https://github.com/allan2/dotenvy): 本地.env文件环境变量化支持
 - [anyhow](https://github.com/dtolnay/anyhow): 错误处理支持
 - [validator](https://github.com/Keats/validator): 模型校验器 
+
+## 数据迁移
+
+本地可通过`docker compose up`启动构建/测试所需的`Postgresql`和`Redis`。
+
+- 先安装`sqlx-cli`工具：`cargo install sqlx-cli`
+- 数据库创建：`sqlx database create`
+- 数据迁移：`sqlx migrate run`
