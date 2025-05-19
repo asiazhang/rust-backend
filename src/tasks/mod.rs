@@ -10,11 +10,11 @@ use crate::models::config::AppConfig;
 use crate::models::redis_task::{RedisConsumerHeartBeat, RedisTask, RedisTaskCreator};
 use crate::tasks::task_type_a::TaskTypeACreator;
 use crate::tasks::task_type_b::TaskTypeBCreator;
-use color_eyre::eyre::Context;
 use color_eyre::Result;
+use color_eyre::eyre::Context;
+use futures::StreamExt;
 use futures::future::try_join_all;
 use futures::stream::iter;
-use futures::StreamExt;
 use redis::aio::ConnectionManager;
 use redis::streams::{StreamId, StreamReadOptions, StreamReadReply};
 use redis::{AsyncCommands, RedisError, RedisResult, Value};
@@ -227,6 +227,8 @@ async fn consumer_task_send_heartbeat(
     let mut interval = tokio::time::interval(Duration::from_secs(5));
     let heartbeat_key = "rust_backend_consumers:heartbeat";
 
+    let mut conn = redis_task.conn.clone();
+
     loop {
         // 避免初始状态已经是true导致无法退出
         if *shutdown_rx.borrow() {
@@ -249,7 +251,7 @@ async fn consumer_task_send_heartbeat(
 
                 if let Ok(json_data) = serde_json::to_string(&redis_heartbeat) {
                     trace!("Sending heartbeat to Redis: {}", json_data);
-                    let res :Result<(), RedisError> = redis_task.conn.clone().hset(heartbeat_key, &consumer_name, json_data).await;
+                    let res :Result<(), RedisError> = conn.hset(heartbeat_key, &consumer_name, json_data).await;
                     if let Err(err) = res {
                         warn!("Consumer {} redis heartbeat error: {}", consumer_name, err);
                     }
@@ -279,8 +281,9 @@ async fn consumer_task_worker(
     // 这样会违反redis的借用原则（mut借用在作用域里面只能有一个）
     let mut shutdown_rx = shutdown_rx.clone();
 
+    let mut conn = redis_task.conn.clone();
+
     loop {
-        let mut conn = redis_task.conn.clone();
         // 避免初始状态已经是true导致无法退出
         if *shutdown_rx.borrow() {
             break;
@@ -327,7 +330,7 @@ async fn consumer_task_worker(
 ///
 /// `>`流表示读取redis中的undelivered数据。会正常遵守block时间。
 async fn xread_group(
-    conn: &mut redis::aio::ConnectionManager,
+    conn: &mut ConnectionManager,
     streams: &[String],
     opts: &StreamReadOptions,
     redis_task: &Arc<RedisTask>,
@@ -348,7 +351,7 @@ async fn xread_group(
 }
 
 async fn consume_redis_message(
-    conn: &mut redis::aio::ConnectionManager,
+    conn: &mut ConnectionManager,
     reply: StreamReadReply,
     redis_task: &Arc<RedisTask>,
 ) -> Result<()> {
