@@ -1,5 +1,7 @@
 # Rust backend
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/asiazhang/rust-backend)
+
 使用Rust来开发后端服务，包含以下功能：
 
 - `web-api`支持
