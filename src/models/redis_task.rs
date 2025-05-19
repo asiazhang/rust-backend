@@ -17,9 +17,6 @@ pub struct RedisTask {
     /// Redis消费者名称模板(不包含消费者索引ID)
     pub consumer_name_template: String,
 
-    /// Redis数据库连接池
-    pub conn: redis::aio::ConnectionManager,
-
     /// Redis消息处理器
     ///
     /// 这是一个动态的处理器，需要符合 [`RedisHandler`] 特征
@@ -57,5 +54,5 @@ pub trait RedisHandler: Send + Sync {
 }
 
 pub trait RedisTaskCreator: Send + Sync {
-    fn new_redis_task(conn: redis::aio::ConnectionManager) -> Arc<RedisTask>;
+    fn new_redis_task() -> Arc<RedisTask>;
 }

@@ -2,7 +2,6 @@ use crate::models::redis_task::{RedisHandler, RedisTask, RedisTaskCreator};
 use crate::models::tasks::TaskInfo;
 use async_trait::async_trait;
 use color_eyre::Result;
-use redis::aio::ConnectionManager;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, trace};
@@ -25,10 +24,9 @@ impl RedisHandler for TaskTypeACreator {
 }
 
 impl RedisTaskCreator for TaskTypeACreator {
-    fn new_redis_task(conn: ConnectionManager) -> Arc<RedisTask> {
+    fn new_redis_task() -> Arc<RedisTask> {
         Arc::new(RedisTask {
             stream_name: "task_type_a".to_string(),
-            conn,
             consumer_name_template: "task_consumer".to_string(),
             handler: Arc::new(TaskTypeACreator),
         })

@@ -22,10 +22,9 @@ impl RedisHandler for TaskTypeBCreator {
 }
 
 impl RedisTaskCreator for TaskTypeBCreator {
-    fn new_redis_task(conn: redis::aio::ConnectionManager) -> Arc<RedisTask> {
+    fn new_redis_task() -> Arc<RedisTask> {
         Arc::new(RedisTask {
             stream_name: "task_type_b".to_string(),
-            conn,
             consumer_name_template: "task_consumer".to_string(),
             handler: Arc::new(TaskTypeBCreator),
         })

@@ -78,16 +78,12 @@ pub async fn start_job_consumers(
     try_join!(
         guard_start_create_task_consumers(
             Arc::clone(&app_config),
-            TaskTypeACreator::new_redis_task(
-                new_redis_connection_manager(app_config.clone()).await?
-            ),
+            TaskTypeACreator::new_redis_task(),
             shutdown_rx.clone()
         ),
         guard_start_create_task_consumers(
             Arc::clone(&app_config),
-            TaskTypeBCreator::new_redis_task(
-                new_redis_connection_manager(app_config.clone()).await?
-            ),
+            TaskTypeBCreator::new_redis_task(),
             shutdown_rx.clone()
         )
     )?;
@@ -97,9 +93,9 @@ pub async fn start_job_consumers(
     Ok(())
 }
 
-async fn new_redis_connection_manager(app_config: Arc<AppConfig>) -> Result<ConnectionManager> {
+async fn new_redis_connection_manager(conn_str: &str) -> Result<ConnectionManager> {
     Ok(ConnectionManager::new(redis::Client::open(
-        app_config.redis.redis_conn_str.clone(),
+        conn_str,
     )?)
     .await?)
 }
@@ -145,14 +141,16 @@ async fn start_create_task_consumers(
     redis_task: Arc<RedisTask>,
     shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
-    create_task_group(&redis_task).await?;
+    create_task_group(app_config.redis.redis_conn_str.clone(), &redis_task).await?;
 
     // 根据配置数据，创建多个消费者。
     // 这几个消费者会并行从redis读取消息并消费。
     let consumers: Vec<_> = (0..app_config.redis.max_consumer_count)
         .map(|i| {
             let consumer_name = format!("{}_{}", redis_task.consumer_name_template, i);
+
             consumer_task_worker_with_heartbeat(
+                app_config.redis.redis_conn_str.clone(),
                 Arc::clone(&redis_task),
                 consumer_name,
                 shutdown_rx.clone(),
@@ -171,11 +169,12 @@ async fn start_create_task_consumers(
 
 const MESSAGE_KEY: &str = "message";
 
-async fn create_task_group(redis_task: &RedisTask) -> Result<()> {
+async fn create_task_group(conn_str: String, redis_task: &RedisTask) -> Result<()> {
     // 创建消费组，来支持并行消费消息。
     // 由于消费组不能多次创建，因此失败了提示warning即可
-    let re: RedisResult<()> = redis_task
-        .conn
+    let conn = new_redis_connection_manager(&conn_str).await?;
+    
+    let re: RedisResult<()> = conn
         .clone()
         .xgroup_create_mkstream(&redis_task.stream_name, GROUP_NAME, "$")
         .await;
@@ -194,17 +193,21 @@ async fn create_task_group(redis_task: &RedisTask) -> Result<()> {
 ///
 /// 通过记录心跳消息，我们能检测到哪些消费者已经失效，就可以将发给此消费者的信息重平衡到其他消费者
 async fn consumer_task_worker_with_heartbeat(
+    conn_str: String,
     redis_task: Arc<RedisTask>,
     consumer_name: String,
     shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
+    let conn = new_redis_connection_manager(&conn_str).await?;
     _ = try_join!(
         consumer_task_send_heartbeat(
+            conn.clone(),
             Arc::clone(&redis_task),
             consumer_name.clone(),
             shutdown_rx.clone()
         ),
         consumer_task_worker(
+            conn.clone(),
             Arc::clone(&redis_task),
             consumer_name.clone(),
             shutdown_rx.clone()
@@ -220,14 +223,13 @@ async fn consumer_task_worker_with_heartbeat(
 
 /// 定时发送心跳消息
 async fn consumer_task_send_heartbeat(
+    mut conn: ConnectionManager,
     redis_task: Arc<RedisTask>,
     consumer_name: String,
     mut shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
     let mut interval = tokio::time::interval(Duration::from_secs(5));
     let heartbeat_key = "rust_backend_consumers:heartbeat";
-
-    let mut conn = redis_task.conn.clone();
 
     loop {
         // 避免初始状态已经是true导致无法退出
@@ -264,6 +266,7 @@ async fn consumer_task_send_heartbeat(
 }
 
 async fn consumer_task_worker(
+    mut conn: ConnectionManager,
     redis_task: Arc<RedisTask>,
     consumer_name: String,
     shutdown_rx: Receiver<bool>,
@@ -280,8 +283,6 @@ async fn consumer_task_worker(
     // 否则在[`select!`]多个分支中，都会访问到 &mut redis_task
     // 这样会违反redis的借用原则（mut借用在作用域里面只能有一个）
     let mut shutdown_rx = shutdown_rx.clone();
-
-    let mut conn = redis_task.conn.clone();
 
     loop {
         // 避免初始状态已经是true导致无法退出
