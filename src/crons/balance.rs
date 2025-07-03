@@ -26,10 +26,8 @@ use anyhow::Result;
 use crate::models::redis_task::RedisConsumerHeartBeat;
 use crate::models::redis_constants::{
     CONSUMER_HEARTBEAT_KEY, CONSUMER_GROUP_NAME, HEARTBEAT_TIMEOUT_SECONDS, 
-    REBALANCE_CHECK_INTERVAL_SECONDS, REBALANCE_LOCK_KEY, LOCK_TTL_SECONDS,
-    MAX_REBALANCE_RETRIES, REBALANCE_RETRY_INTERVAL_SECONDS, BATCH_SIZE
+    REBALANCE_CHECK_INTERVAL_SECONDS, REBALANCE_LOCK_KEY, LOCK_TTL_SECONDS, BATCH_SIZE
 };
-use std::time::Instant;
 use redis::{SetOptions, SetExpiry, ExistenceCheck};
 
 /// 扩展的消费者状态信息，包含分组信息
@@ -41,20 +39,6 @@ pub(crate) struct ConsumerStatus {
     group: String,
 }
 
-/// 重平衡监控指标
-#[derive(Debug, Default)]
-pub struct RebalanceMetrics {
-    /// 失效消费者数量
-    pub failed_consumers_count: u64,
-    /// 重新分配的消息数量
-    pub redistributed_messages_count: u64,
-    /// 重平衡执行时长（毫秒）
-    pub rebalance_duration_ms: u64,
-    /// 错误数量
-    pub errors_count: u64,
-    /// 活跃消费者数量
-    pub active_consumers_count: u64,
-}
 
 /// 检查间隔时间
 const CHECK_INTERVAL: Duration = Duration::from_secs(REBALANCE_CHECK_INTERVAL_SECONDS);
@@ -68,19 +52,9 @@ pub async fn start_rebalance_job(conn: ConnectionManager) -> Result<()> {
     let mut conn = conn;
     
     loop {
-        match rebalance_with_retry_and_metrics(&mut conn).await {
-            Ok(metrics) => {
-                if metrics.failed_consumers_count > 0 || metrics.redistributed_messages_count > 0 {
-                    info!("📊 重平衡完成: 失效消费者={}, 重分配消息={}, 活跃消费者={}, 耗时={}ms", 
-                        metrics.failed_consumers_count,
-                        metrics.redistributed_messages_count,
-                        metrics.active_consumers_count,
-                        metrics.rebalance_duration_ms
-                    );
-                }
-                if metrics.errors_count > 0 {
-                    warn!("⚠️ 重平衡过程中发生 {} 个错误", metrics.errors_count);
-                }
+        match rebalance_with_retry(&mut conn).await {
+            Ok(()) => {
+                debug!("✅ 重平衡检查完成");
             }
             Err(e) => {
                 error!("❌ 重平衡任务执行失败: {}", e);
@@ -115,121 +89,30 @@ async fn release_rebalance_lock(conn: &mut ConnectionManager) -> RedisResult<()>
     Ok(())
 }
 
-/// 带重试和监控指标的重平衡执行
-async fn rebalance_with_retry_and_metrics(conn: &mut ConnectionManager) -> Result<RebalanceMetrics> {
-    let start_time = Instant::now();
-    let mut metrics = RebalanceMetrics::default();
-    
+/// 执行重平衡（带分布式锁）
+async fn rebalance_with_retry(conn: &mut ConnectionManager) -> Result<()> {
     // 尝试获取分布式锁
     if !acquire_rebalance_lock(conn).await.unwrap_or(false) {
         debug!("🔒 其他重平衡任务正在运行，跳过本次执行");
-        return Ok(metrics);
+        return Ok(());
     }
     
     debug!("🔓 成功获取重平衡锁");
     
-    // 使用重试机制执行重平衡
-    let mut retry_count = 0;
-    let mut last_error = None;
+    // 执行重平衡逻辑
+    let rebalance_result = rebalance(conn).await.map_err(|e| anyhow::anyhow!("重平衡执行失败: {}", e));
     
-    while retry_count < MAX_REBALANCE_RETRIES {
-        match rebalance_with_metrics(conn, &mut metrics).await {
-            Ok(()) => {
-                // 成功完成，释放锁并返回
-                if let Err(e) = release_rebalance_lock(conn).await {
-                    warn!("⚠️ 释放重平衡锁失败: {}", e);
-                }
-                
-                metrics.rebalance_duration_ms = start_time.elapsed().as_millis() as u64;
-                return Ok(metrics);
-            }
-            Err(e) => {
-                retry_count += 1;
-                metrics.errors_count += 1;
-                last_error = Some(e);
-                
-                if retry_count < MAX_REBALANCE_RETRIES {
-                    warn!("⚠️ 重平衡失败，重试 {}/{}: {:?}", retry_count, MAX_REBALANCE_RETRIES, last_error);
-                    sleep(Duration::from_secs(REBALANCE_RETRY_INTERVAL_SECONDS)).await;
-                } else {
-                    error!("❌ 重平衡多次重试失败: {:?}", last_error);
-                }
-            }
-        }
-    }
-    
-    // 重试失败，释放锁
+    // 无论成功还是失败，都要释放锁
     if let Err(e) = release_rebalance_lock(conn).await {
         warn!("⚠️ 释放重平衡锁失败: {}", e);
     }
     
-    metrics.rebalance_duration_ms = start_time.elapsed().as_millis() as u64;
-    
-    if let Some(e) = last_error {
-        return Err(anyhow::anyhow!("重平衡多次重试失败: {:?}", e));
-    }
-    
-    Ok(metrics)
+    rebalance_result
 }
 
-/// 执行消息重平衡逻辑（带监控指标）
-async fn rebalance_with_metrics(conn: &mut ConnectionManager, metrics: &mut RebalanceMetrics) -> RedisResult<()> {
-    debug!("🔍 开始检查消费者状态...");
-    
-    // 1. 获取所有消费者状态
-    let consumer_statuses = get_all_consumer_statuses(conn).await?;
-    
-    if consumer_statuses.is_empty() {
-        debug!("📭 没有发现任何消费者状态");
-        return Ok(());
-    }
-    
-    let current_time = Utc::now().timestamp();
-    let mut failed_consumers = Vec::new();
-    let mut active_consumers_by_group: HashMap<String, Vec<ConsumerStatus>> = HashMap::new();
-    
-    // 2. 分析消费者状态，区分失效和正常的消费者
-    for status in consumer_statuses {
-        let time_since_heartbeat = current_time - status.heartbeat.last_heartbeat;
-        
-        if time_since_heartbeat > HEARTBEAT_TIMEOUT_SECONDS {
-            warn!("💀 发现失效消费者: {} ({}秒无响应)", status.heartbeat.consumer_name, time_since_heartbeat);
-            failed_consumers.push(status);
-        } else {
-            debug!("✅ 消费者正常: {} ({}秒前活跃)", status.heartbeat.consumer_name, time_since_heartbeat);
-            active_consumers_by_group
-                .entry(status.group.clone())
-                .or_default()
-                .push(status);
-        }
-    }
-    
-    // 更新指标
-    metrics.failed_consumers_count = failed_consumers.len() as u64;
-    metrics.active_consumers_count = active_consumers_by_group
-        .values()
-        .map(|consumers| consumers.len() as u64)
-        .sum();
-    
-    // 3. 对每个失效的消费者执行重平衡
-    for failed_consumer in failed_consumers {
-        match rebalance_failed_consumer_with_metrics(conn, &failed_consumer, &active_consumers_by_group, metrics).await {
-            Ok(()) => {
-                debug!("✅ 成功重平衡消费者: {}", failed_consumer.heartbeat.consumer_name);
-            }
-            Err(e) => {
-                error!("❌ 重平衡失效消费者 {} 失败: {}", failed_consumer.heartbeat.consumer_name, e);
-                metrics.errors_count += 1;
-                // 继续处理其他消费者，不因为单个失败而停止
-            }
-        }
-    }
-    
-    Ok(())
-}
 
-/// 原始的重平衡逻辑（保持向后兼容）
-#[allow(dead_code)]
+
+/// 重平衡逻辑
 async fn rebalance(conn: &mut ConnectionManager) -> RedisResult<()> {
     debug!("🔍 开始检查消费者状态...");
     
@@ -317,48 +200,8 @@ async fn get_all_consumer_statuses(conn: &mut ConnectionManager) -> RedisResult<
     Ok(statuses)
 }
 
-/// 重平衡失效消费者的pending消息（带监控指标）
-async fn rebalance_failed_consumer_with_metrics(
-    conn: &mut ConnectionManager,
-    failed_consumer: &ConsumerStatus,
-    active_consumers_by_group: &HashMap<String, Vec<ConsumerStatus>>,
-    metrics: &mut RebalanceMetrics,
-) -> RedisResult<()> {
-    info!("🔄 开始重平衡失效消费者: {}", failed_consumer.heartbeat.consumer_name);
-    
-    // 1. 检查同组是否有活跃的消费者
-    let active_consumers = match active_consumers_by_group.get(&failed_consumer.group) {
-        Some(consumers) if !consumers.is_empty() => consumers,
-        _ => {
-            warn!("⚠️ 组 {} 中没有活跃的消费者，跳过重平衡", failed_consumer.group);
-            // 仍然删除失效消费者的状态
-            remove_consumer_status(conn, &failed_consumer.heartbeat.consumer_name).await?;
-            return Ok(());
-        }
-    };
-    
-    // 2. 获取失效消费者的pending消息
-    let pending_messages = get_pending_messages(conn, &failed_consumer.heartbeat.stream_name, &failed_consumer.group, &failed_consumer.heartbeat.consumer_name).await?;
-    
-    if pending_messages.is_empty() {
-        info!("📭 消费者 {} 没有pending消息需要重平衡", failed_consumer.heartbeat.consumer_name);
-    } else {
-        info!("📬 消费者 {} 有 {} 条pending消息需要重平衡", failed_consumer.heartbeat.consumer_name, pending_messages.len());
-        
-        // 3. 将pending消息批量分发给同组的活跃消费者
-        let redistributed_count = redistribute_messages_batch(conn, &failed_consumer.heartbeat.stream_name, &failed_consumer.group, &pending_messages, active_consumers).await?;
-        metrics.redistributed_messages_count += redistributed_count;
-    }
-    
-    // 4. 删除失效消费者的状态记录
-    remove_consumer_status(conn, &failed_consumer.heartbeat.consumer_name).await?;
-    
-    info!("✅ 完成消费者 {} 的重平衡", failed_consumer.heartbeat.consumer_name);
-    Ok(())
-}
 
-/// 重平衡失效消费者的pending消息（原版，保持向后兼容）
-#[allow(dead_code)]
+/// 重平衡失效消费者的pending消息
 async fn rebalance_failed_consumer(
     conn: &mut ConnectionManager,
     failed_consumer: &ConsumerStatus,
@@ -385,8 +228,8 @@ async fn rebalance_failed_consumer(
     } else {
         info!("📬 消费者 {} 有 {} 条pending消息需要重平衡", failed_consumer.heartbeat.consumer_name, pending_messages.len());
         
-        // 3. 将pending消息随机分发给同组的活跃消费者
-        redistribute_messages(conn, &failed_consumer.heartbeat.stream_name, &failed_consumer.group, &pending_messages, active_consumers).await?;
+        // 3. 将pending消息批量分发给同组的活跃消费者
+        let _ = redistribute_messages_batch(conn, &failed_consumer.heartbeat.stream_name, &failed_consumer.group, &pending_messages, active_consumers).await?;
     }
     
     // 4. 删除失效消费者的状态记录
@@ -519,43 +362,6 @@ async fn redistribute_messages_individually(
     Ok(redistributed_count)
 }
 
-/// 重新分发消息到活跃的消费者（原版，保持向后兼容）
-#[allow(dead_code)]
-async fn redistribute_messages(
-    conn: &mut ConnectionManager,
-    stream: &str,
-    group: &str,
-    message_ids: &[String],
-    active_consumers: &[ConsumerStatus],
-) -> RedisResult<()> {
-    let consumer_names: Vec<&str> = active_consumers.iter().map(|c| c.heartbeat.consumer_name.as_str()).collect();
-    
-    for (msg_idx, message_id) in message_ids.iter().enumerate() {
-        // 轮询选择一个活跃的消费者
-        if let Some(&target_consumer) = consumer_names.get(msg_idx % consumer_names.len()) {
-            // 使用XCLAIM命令将消息重新分配给目标消费者
-            let claimed: Value = conn
-                .xclaim(
-                    stream,
-                    group,
-                    target_consumer,
-                    0, // min_idle_time设为0，强制claim
-                    &[message_id],
-                )
-                .await?;
-            
-            if matches!(claimed, Value::Array(ref arr) if !arr.is_empty()) {
-                info!("📤 消息 {} 已重新分配给消费者 {}", message_id, target_consumer);
-            } else {
-                warn!("⚠️ 消息 {} 重新分配失败", message_id);
-            }
-        } else {
-            error!("❌ 没有可用的活跃消费者来接收消息 {}", message_id);
-        }
-    }
-    
-    Ok(())
-}
 
 /// 删除消费者状态记录
 async fn remove_consumer_status(conn: &mut ConnectionManager, consumer_name: &str) -> RedisResult<()> {
