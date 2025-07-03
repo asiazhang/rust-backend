@@ -57,7 +57,7 @@ async fn main() -> Result<()> {
         // 启动redis-consumer服务
         start_job_consumers(Arc::clone(&conf), shutdown_rx.clone()),
         // 启动cron-jobs服务
-        start_cron_tasks(shutdown_rx.clone()),
+        start_cron_tasks(Arc::clone(&conf), shutdown_rx.clone()),
     )?;
 
     info!("rust backend exit successfully");

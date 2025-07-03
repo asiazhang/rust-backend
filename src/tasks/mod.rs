@@ -8,6 +8,7 @@ pub mod task_type_b;
 
 use crate::models::config::AppConfig;
 use crate::models::redis_task::{RedisConsumerHeartBeat, RedisTask, RedisTaskCreator};
+use crate::models::redis_constants::{CONSUMER_HEARTBEAT_KEY, CONSUMER_GROUP_NAME, HEARTBEAT_INTERVAL_SECONDS};
 use crate::tasks::task_type_a::TaskTypeACreator;
 use crate::tasks::task_type_b::TaskTypeBCreator;
 use color_eyre::Result;
@@ -100,7 +101,7 @@ async fn new_redis_connection_manager(conn_str: &str) -> Result<ConnectionManage
     .await?)
 }
 
-const GROUP_NAME: &str = "rust-backend";
+// GROUP_NAME 现在从 redis_constants 模块导入
 
 /// 让redis消费者一直执行，直到收到shutdown信号
 ///
@@ -176,10 +177,10 @@ async fn create_task_group(conn_str: String, redis_task: &RedisTask) -> Result<(
     
     let re: RedisResult<()> = conn
         .clone()
-        .xgroup_create_mkstream(&redis_task.stream_name, GROUP_NAME, "$")
+        .xgroup_create_mkstream(&redis_task.stream_name, CONSUMER_GROUP_NAME, "$")
         .await;
     if let Err(err) = re {
-        warn!("Failed to create redis task group {}: {}", GROUP_NAME, err);
+        warn!("Failed to create redis task group {}: {}", CONSUMER_GROUP_NAME, err);
     }
 
     Ok(())
@@ -228,8 +229,7 @@ async fn consumer_task_send_heartbeat(
     consumer_name: String,
     mut shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
-    let mut interval = tokio::time::interval(Duration::from_secs(5));
-    let heartbeat_key = "rust_backend_consumers:heartbeat";
+    let mut interval = tokio::time::interval(Duration::from_secs(HEARTBEAT_INTERVAL_SECONDS));
 
     loop {
         // 避免初始状态已经是true导致无法退出
@@ -253,7 +253,7 @@ async fn consumer_task_send_heartbeat(
 
                 if let Ok(json_data) = serde_json::to_string(&redis_heartbeat) {
                     trace!("Sending heartbeat to Redis: {}", json_data);
-                    let res :Result<(), RedisError> = conn.hset(heartbeat_key, &consumer_name, json_data).await;
+                    let res :Result<(), RedisError> = conn.hset(CONSUMER_HEARTBEAT_KEY, &consumer_name, json_data).await;
                     if let Err(err) = res {
                         warn!("Consumer {} redis heartbeat error: {}", consumer_name, err);
                     }
@@ -274,7 +274,7 @@ async fn consumer_task_worker(
     debug!("Redis job consumer {} started", consumer_name);
 
     let opts = StreamReadOptions::default()
-        .group(GROUP_NAME, &consumer_name)
+        .group(CONSUMER_GROUP_NAME, &consumer_name)
         .block(1000) // 最长等待时间1秒，可以满足大多数场景
         .count(10); // 最多获取10个数据
     let streams = vec![redis_task.stream_name.clone()];
@@ -375,7 +375,7 @@ async fn consume_redis_message(
         let xack_ret: Result<(), RedisError> = conn
             .xack(
                 &redis_task.stream_name,
-                GROUP_NAME,
+                CONSUMER_GROUP_NAME,
                 &key.ids.iter().map(|it| &it.id).collect::<Vec<_>>(),
             )
             .await;
