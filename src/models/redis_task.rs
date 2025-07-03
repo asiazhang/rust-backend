@@ -24,7 +24,7 @@ pub struct RedisTask {
 }
 
 /// Redis消费者心跳信息
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RedisConsumerHeartBeat {
     /// Redis流名称
     pub stream_name: String,

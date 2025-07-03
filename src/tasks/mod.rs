@@ -215,8 +215,7 @@ async fn consumer_task_worker_with_heartbeat(
         ),
     )
     .context(format!(
-        "Creating consumer {} with auto heartbeat",
-        consumer_name
+        "Creating consumer {consumer_name} with auto heartbeat"
     ))?;
 
     Ok(())

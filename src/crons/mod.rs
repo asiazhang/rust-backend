@@ -12,8 +12,8 @@ pub async fn start_cron_tasks(
     info!("🕐 启动定时任务...");
 
     // 创建Redis连接用于重平衡任务
-    let redis_client = redis::Client::open(&app_config.redis.redis_conn_str)?;
-    let redis_conn = redis_client.get_tokio_connection_manager().await?;
+    let redis_client = redis::Client::open(app_config.redis.redis_conn_str.clone())?;
+    let redis_conn = redis_client.get_connection_manager().await?;
     
     // 启动Redis消息重平衡任务
     let balance_task = tokio::spawn(async move {

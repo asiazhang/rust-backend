@@ -32,28 +32,28 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         match self {
             AppError::ValidationFailed(err) => {
-                (StatusCode::BAD_REQUEST, format!("Validate failed: {}", err)).into_response()
+                (StatusCode::BAD_REQUEST, format!("Validate failed: {err}")).into_response()
             }
             AppError::DatabaseError(err) => match err {
                 sqlx::Error::RowNotFound => (
                     StatusCode::NOT_FOUND,
-                    format!("Can not found resource: {}", err),
+                    format!("Can not found resource: {err}"),
                 )
                     .into_response(),
                 _ => (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Database error: {}", err),
+                    format!("Database error: {err}"),
                 )
                     .into_response(),
             },
             AppError::RedisError(err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Redis error: {}", err),
+                format!("Redis error: {err}"),
             )
                 .into_response(),
             AppError::InternalError(err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Something went wrong: {}", err),
+                format!("Something went wrong: {err}"),
             )
                 .into_response(),
         }

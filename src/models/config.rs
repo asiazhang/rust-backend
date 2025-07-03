@@ -63,7 +63,7 @@ impl AppConfig {
 
         config
             .validate()
-            .context(format!("Validate app config: {:?}", config))?;
+            .context(format!("Validate app config: {config:?}"))?;
 
         Ok(Arc::new(config))
     }

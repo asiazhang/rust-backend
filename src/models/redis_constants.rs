@@ -29,3 +29,22 @@ pub const HEARTBEAT_INTERVAL_SECONDS: u64 = 5;
 /// 
 /// 重平衡任务检查失效消费者的频率
 pub const REBALANCE_CHECK_INTERVAL_SECONDS: u64 = 10;
+
+/// 重平衡分布式锁键名
+/// 
+/// 防止多个重平衡任务同时运行导致竞态条件
+pub const REBALANCE_LOCK_KEY: &str = "rust_backend:rebalance_lock";
+
+/// 分布式锁超时时间（秒）
+/// 
+/// 防止锁永远不释放
+pub const LOCK_TTL_SECONDS: u64 = 30;
+
+/// 重平衡最大重试次数
+pub const MAX_REBALANCE_RETRIES: u32 = 3;
+
+/// 重平衡重试间隔（秒）
+pub const REBALANCE_RETRY_INTERVAL_SECONDS: u64 = 2;
+
+/// 批量处理消息的大小
+pub const BATCH_SIZE: usize = 10;
