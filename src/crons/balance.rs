@@ -19,14 +19,13 @@
 use redis::{AsyncCommands, RedisResult, Value};
 use redis::aio::ConnectionManager;
 use std::collections::HashMap;
-use tokio::time::{Duration, sleep};
 use tracing::{info, warn, error, debug};
 use chrono::Utc;
 use anyhow::Result;
 use crate::models::redis_task::RedisConsumerHeartBeat;
 use crate::models::redis_constants::{
     CONSUMER_HEARTBEAT_KEY, CONSUMER_GROUP_NAME, HEARTBEAT_TIMEOUT_SECONDS, 
-    REBALANCE_CHECK_INTERVAL_SECONDS, REBALANCE_LOCK_KEY, LOCK_TTL_SECONDS, BATCH_SIZE
+    REBALANCE_LOCK_KEY, LOCK_TTL_SECONDS, BATCH_SIZE
 };
 use redis::{SetOptions, SetExpiry, ExistenceCheck};
 
@@ -40,28 +39,22 @@ pub(crate) struct ConsumerStatus {
 }
 
 
-/// 检查间隔时间
-const CHECK_INTERVAL: Duration = Duration::from_secs(REBALANCE_CHECK_INTERVAL_SECONDS);
 
-/// 启动Redis消息重平衡定时任务
+/// 执行一次Redis消息重平衡检查
 /// 
-/// 这个函数会持续运行，每隔10秒检查一次消费者状态
-pub async fn start_rebalance_job(conn: ConnectionManager) -> Result<()> {
-    info!("🔄 启动Redis消息重平衡定时任务");
+/// 这个函数会执行一次重平衡检查，由外部 cron 调度器来调用
+pub async fn execute_rebalance_once(conn: &mut ConnectionManager) -> Result<()> {
+    debug!("🔄 执行重平衡检查");
     
-    let mut conn = conn;
-    
-    loop {
-        match rebalance_with_retry(&mut conn).await {
-            Ok(()) => {
-                debug!("✅ 重平衡检查完成");
-            }
-            Err(e) => {
-                error!("❌ 重平衡任务执行失败: {}", e);
-            }
+    match rebalance_with_retry(conn).await {
+        Ok(()) => {
+            debug!("✅ 重平衡检查完成");
+            Ok(())
         }
-        
-        sleep(CHECK_INTERVAL).await;
+        Err(e) => {
+            error!("❌ 重平衡任务执行失败: {}", e);
+            Err(e)
+        }
     }
 }
 
