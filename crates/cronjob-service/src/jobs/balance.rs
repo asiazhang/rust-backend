@@ -16,7 +16,7 @@
 //!     - 如果心跳正常，则什么也不做
 //!
 
-use anyhow::Result;
+use color_eyre::Result;
 use chrono::Utc;
 use redis::aio::ConnectionManager;
 use redis::{AsyncCommands, RedisResult, Value};
@@ -90,7 +90,7 @@ async fn rebalance_with_retry(conn: &mut ConnectionManager) -> Result<()> {
     debug!("🔓 成功获取重平衡锁");
 
     // 执行重平衡逻辑
-    let rebalance_result = rebalance(conn).await.map_err(|e| anyhow::anyhow!("重平衡执行失败: {}", e));
+    let rebalance_result = rebalance(conn).await.map_err(|e| color_eyre::eyre::eyre!("重平衡执行失败: {}", e));
 
     // 无论成功还是失败，都要释放锁
     if let Err(e) = release_rebalance_lock(conn).await {
