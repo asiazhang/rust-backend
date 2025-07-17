@@ -13,20 +13,12 @@ path = "src/lib.rs"
 [dependencies]
 # 从workspace继承的依赖
 tokio = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
-thiserror = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-sqlx = { workspace = true }
 redis = { workspace = true }
 chrono = { workspace = true }
-dotenvy = { workspace = true }
-async-trait = { workspace = true }
 color-eyre = { workspace = true }
-time = { workspace = true }
-rand = { workspace = true }
 
 # Cronjob服务特有的依赖
 tokio-cron-scheduler = "0.14.0"
