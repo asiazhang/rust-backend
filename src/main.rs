@@ -9,7 +9,7 @@
 //!
 //! 所有代码都放在一个程序中，方便部署和维护(适用于小型系统)
 
-use crate::routes::start_axum_server;
+use web_service::start_web_service;
 use color_eyre::eyre::Context;
 use color_eyre::Result;
 use consumer_service::start_job_consumers;
@@ -21,8 +21,6 @@ use tokio::sync::watch::Sender;
 use tokio::{signal, try_join};
 use tracing::info;
 
-mod models;
-mod routes;
 
 /// 入口函数
 ///
@@ -54,7 +52,7 @@ async fn main() -> Result<()> {
     _ = try_join!(
         start_shutdown_signal(shutdown_tx),
         // 启动web-api服务
-        start_axum_server(pool, shutdown_rx.clone()),
+        start_web_service(pool, shutdown_rx.clone()),
         // 启动redis-consumer服务
         start_job_consumers(Arc::clone(&conf), shutdown_rx.clone()),
         // 启动cron-jobs服务

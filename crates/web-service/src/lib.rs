@@ -1,50 +1,38 @@
-pub mod handlers;
-pub mod middleware;
+//! Web服务模块
+//!
+//! 提供 HTTP API 接口和文档服务
+
+use color_eyre::Result;
+use sqlx::{Pool, Postgres};
+use std::sync::Arc;
+use tokio::sync::watch::Receiver;
+use tracing::info;
+
+pub mod models;
 pub mod routes;
 
-use axum::{response::Json, routing::get, Router};
-use serde_json::{json, Value};
-use tracing::{info, instrument};
-
-/// 创建Web服务应用
-pub fn create_app() -> Router {
-    Router::new()
-        .route("/", get(root))
-        .route("/health", get(health_check))
-        .route("/api/v1/users", get(handlers::users::list_users))
-        .route("/api/v1/projects", get(handlers::projects::list_projects))
+/// 应用共享状态
+pub struct AppState {
+    pub db_pool: Pool<Postgres>,
 }
 
-/// 启动Web服务
-pub async fn start_server(port: u16) -> anyhow::Result<()> {
-    info!("🚀 启动 Web Service...");
-
-    let app = create_app();
-
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
-        .await
-        .expect("Failed to bind to address");
-
-    info!("📡 Web Service 正在监听 http://0.0.0.0:{}", port);
-
-    axum::serve(listener, app).await?;
+/// 启动 Web 服务
+pub async fn start_web_service(pool: Pool<Postgres>, mut shutdown_rx: Receiver<bool>) -> Result<()> {
+    let shared_state = Arc::new(AppState { db_pool: pool });
+    
+    let router = routes::create_app_router(shared_state);
+    
+    let bind_addr = "0.0.0.0:8080";
+    info!("🚀 启动 Web Service 在 {}", bind_addr);
+    
+    let listener = tokio::net::TcpListener::bind(bind_addr).await?;
+    
+    axum::serve(listener, router.into_make_service())
+        .with_graceful_shutdown(async move {
+            shutdown_rx.changed().await.expect("Failed to receive shutdown signal");
+            info!("🛑 Web Service 正在关闭...");
+        })
+        .await?;
+        
     Ok(())
-}
-
-#[instrument]
-async fn root() -> Json<Value> {
-    Json(json!({
-        "service": "web-service",
-        "status": "running",
-        "message": "🌐 Web Service 运行中"
-    }))
-}
-
-#[instrument]
-async fn health_check() -> Json<Value> {
-    Json(json!({
-        "status": "healthy",
-        "timestamp": chrono::Utc::now().to_rfc3339(),
-        "service": "web-service"
-    }))
 }

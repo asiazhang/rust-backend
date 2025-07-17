@@ -12,6 +12,7 @@ share_lib = { path = "crates/share_lib" }
 consumer-service = { path = "crates/consumer-service" }
 cronjob-service = { path = "crates/cronjob-service" }
 database = { path = "crates/database" }
+web-service = { path = "crates/web-service" }
 
 # 外部依赖
 tokio = { workspace = true }
