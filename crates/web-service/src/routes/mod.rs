@@ -18,7 +18,6 @@ use crate::routes::users::__path_update_user;
 use crate::routes::users::{create_user, delete_user, find_users, get_user, update_user};
 use crate::ConcreteAppState;
 use axum::Router;
-use std::sync::Arc;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
