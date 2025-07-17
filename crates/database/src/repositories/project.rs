@@ -108,6 +108,8 @@ impl ProjectRepositoryTrait for ProjectRepository {
 
     /// 创建新项目
     /// 
+    /// 根据用户输入参数创建项目信息
+    /// 
     /// # 参数
     /// - `project`: 项目创建信息
     /// 
@@ -135,6 +137,8 @@ impl ProjectRepositoryTrait for ProjectRepository {
 
     /// 根据 ID 获取项目信息
     /// 
+    /// 查询指定项目信息
+    /// 
     /// # 参数
     /// - `id`: 项目 ID
     /// 
@@ -161,6 +165,17 @@ impl ProjectRepositoryTrait for ProjectRepository {
     }
 
     /// 更新项目信息
+    /// 
+    /// 根据用户指定的 `id` 和 修改信息 [`ProjectUpdate`] 来更新项目信息。
+    /// 
+    /// ## SQL
+    /// 
+    /// 由于更新数据中的字段大部分都是[`Option`]，因此我们使用了`postgresql`中的`coalesce`函数，如果用户输入的值
+    /// 为None，那么会被转换为数据库的null，最终被转换为之前值。
+    /// 
+    /// 两个好处：
+    /// - 防止前端输入了空数据，导致数据被误清除
+    /// - 不用`if`拼接的方式，代码可维护性更好
     /// 
     /// # 参数
     /// - `id`: 项目 ID
@@ -193,6 +208,8 @@ impl ProjectRepositoryTrait for ProjectRepository {
     }
 
     /// 删除项目
+    /// 
+    /// 删除指定的项目
     /// 
     /// # 参数
     /// - `id`: 项目 ID

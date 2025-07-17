@@ -13,10 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 # 基础依赖
 tokio = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
-anyhow = { workspace = true }
-thiserror = { workspace = true }
 tracing = { workspace = true }
 # 新增依赖
 color-eyre = { workspace = true }
@@ -24,8 +21,6 @@ futures = { workspace = true }
 redis = { workspace = true }
 time = { workspace = true }
 async-trait = { workspace = true }
-validator = { workspace = true }
-dotenvy = { workspace = true }
 
 # 内部依赖
 shared-lib = { path = "../shared-lib" }
