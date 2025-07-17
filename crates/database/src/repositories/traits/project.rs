@@ -14,7 +14,7 @@ use crate::DatabaseResult;
 /// - 项目更新
 /// - 项目删除
 #[async_trait::async_trait]
-pub trait ProjectRepositoryTrait: Send + Sync + 'static {
+pub trait ProjectRepositoryTrait: Send + Sync + Clone + 'static {
     /// 根据查询参数搜索项目
     ///
     /// # 参数

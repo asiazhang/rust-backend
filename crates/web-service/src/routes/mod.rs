@@ -16,8 +16,9 @@ use crate::routes::users::__path_find_users;
 use crate::routes::users::__path_get_user;
 use crate::routes::users::__path_update_user;
 use crate::routes::users::{create_user, delete_user, find_users, get_user, update_user};
-use crate::ConcreteAppState;
+use crate::AppState;
 use axum::Router;
+use database::ProjectRepositoryTrait;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -49,7 +50,7 @@ pub mod users;
 /// .routes!(get)
 /// ```
 ///
-fn routers(state: ConcreteAppState) -> OpenApiRouter {
+fn routers<PR: ProjectRepositoryTrait>(state: AppState<PR>) -> OpenApiRouter {
     OpenApiRouter::new()
         .routes(routes!(find_projects))
         .routes(routes!(get_project, create_project, update_project, delete_project))
@@ -67,7 +68,7 @@ fn routers(state: ConcreteAppState) -> OpenApiRouter {
 ///
 /// 由于使用了 `utoipa` 库来自动化生成`openapi`文档，因此我们没有使用原生的 [`Router`]，而是使用了
 /// [`OpenApiRouter`] 。
-pub fn create_app_router(shared_state: ConcreteAppState) -> Router {
+pub fn create_app_router<PR: ProjectRepositoryTrait>(shared_state: AppState<PR>) -> Router {
     // 当前项目的OpenAPI声明
     #[derive(OpenApi)]
     #[openapi(

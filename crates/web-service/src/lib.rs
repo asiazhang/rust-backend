@@ -18,7 +18,7 @@ pub struct AppState<PR: ProjectRepositoryTrait> {
     pub project_repository: Arc<PR>,
 }
 
-/// 具体的 AppState 类型别名
+/// 具体的应用状态类型（使用 ProjectRepository 实现）
 pub type ConcreteAppState = AppState<ProjectRepository>;
 
 /// 启动 Web 服务

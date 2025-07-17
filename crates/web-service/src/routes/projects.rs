@@ -4,7 +4,7 @@
 use crate::models::common::{Reply, ReplyList};
 use crate::models::err::AppError;
 use crate::models::projects::{ProjectCreate, ProjectInfo, ProjectSearch, ProjectUpdate};
-use crate::ConcreteAppState;
+use crate::AppState;
 use axum::extract::{Path, State};
 use axum::Json;
 use color_eyre::Result;
@@ -53,9 +53,8 @@ use validator::Validate;
         (status = 200, description = "Search results", body = ReplyList<ProjectInfo>)
     ),
 )]
-#[axum::debug_handler]
-pub async fn find_projects(
-    State(state): State<ConcreteAppState>,
+pub async fn find_projects<PR: ProjectRepositoryTrait>(
+    State(state): State<AppState<PR>>,
     Json(search): Json<ProjectSearch>,
 ) -> Result<Json<ReplyList<ProjectInfo>>, AppError> {
     debug!("🔍 搜索项目 {:#?}", search);
@@ -93,9 +92,8 @@ pub async fn find_projects(
         (status = 200, description = "Create project result", body = Reply<ProjectInfo>)
     )
 )]
-#[axum::debug_handler]
-pub async fn create_project(
-    State(state): State<ConcreteAppState>,
+pub async fn create_project<PR: ProjectRepositoryTrait>(
+    State(state): State<AppState<PR>>,
     Json(project): Json<ProjectCreate>,
 ) -> Result<Json<Reply<ProjectInfo>>, AppError> {
     debug!("Creating project {:#?}", project);
@@ -113,8 +111,10 @@ pub async fn create_project(
 
 /// 查询指定项目信息
 #[utoipa::path(get, path = "/projects/{id}", tag = "projects")]
-#[axum::debug_handler]
-pub async fn get_project(State(state): State<ConcreteAppState>, Path(project_id): Path<i32>) -> Result<Json<ProjectInfo>, AppError> {
+pub async fn get_project<PR: ProjectRepositoryTrait>(
+    State(state): State<AppState<PR>>,
+    Path(project_id): Path<i32>,
+) -> Result<Json<ProjectInfo>, AppError> {
     debug!("Getting project id {:#?}", project_id);
 
     let project_repo = state.project_repository.clone();
@@ -127,18 +127,9 @@ pub async fn get_project(State(state): State<ConcreteAppState>, Path(project_id)
 ///
 /// 根据用户指定的 `id` 和 修改信息 [`ProjectUpdate`] 来更新项目信息。
 ///
-/// ## Sql
-///
-/// 由于更新数据中的字段大部分都是[`Option`]，因此我们使用了`postgresql`中的`coalesce`函数，如果用户输入的值
-/// 为None，那么会被转换为数据库的null，最终被转换为之前值。
-///
-/// 两个好处：
-/// - 防止前端输入了空数据，导致数据被误清除
-/// - 不用`if`拼接的方式，代码可维护性更好
 #[utoipa::path(patch, path = "/projects/{id}", tag = "projects")]
-#[axum::debug_handler]
-pub async fn update_project(
-    State(state): State<ConcreteAppState>,
+pub async fn update_project<PR: ProjectRepositoryTrait>(
+    State(state): State<AppState<PR>>,
     Path(project_id): Path<i32>,
     Json(info): Json<ProjectUpdate>,
 ) -> Result<Json<ProjectInfo>, AppError> {
@@ -156,8 +147,10 @@ pub async fn update_project(
 
 /// 删除指定的项目
 #[utoipa::path(delete, path = "/projects/{id}", tag = "projects")]
-#[axum::debug_handler]
-pub async fn delete_project(State(state): State<ConcreteAppState>, Path(project_id): Path<i32>) -> Result<Json<ProjectInfo>, AppError> {
+pub async fn delete_project<PR: ProjectRepositoryTrait>(
+    State(state): State<AppState<PR>>,
+    Path(project_id): Path<i32>,
+) -> Result<Json<ProjectInfo>, AppError> {
     debug!("delete project {:#?}", project_id);
 
     let project_repo = state.project_repository.clone();
