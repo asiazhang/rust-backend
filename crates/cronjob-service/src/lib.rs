@@ -1,4 +1,5 @@
 use color_eyre::Result;
+use shared_lib::models::config::AppConfig;
 use std::sync::Arc;
 use tokio::sync::watch::Receiver;
 use tokio_cron_scheduler::{Job, JobScheduler};
@@ -6,21 +7,15 @@ use tracing::{error, info};
 
 pub mod jobs;
 
-/// 定时任务配置
-#[derive(Debug, Clone)]
-pub struct CronConfig {
-    pub redis_conn_str: String,
-}
-
 /// 启动定时任务
-pub async fn start_cron_tasks(config: Arc<CronConfig>, shutdown_rx: Receiver<bool>) -> Result<()> {
+pub async fn start_cron_tasks(config: Arc<AppConfig>, shutdown_rx: Receiver<bool>) -> Result<()> {
     info!("🕐 启动定时任务调度器...");
 
     // 创建 cron 调度器
     let mut sched = JobScheduler::new().await?;
 
     // 创建Redis连接用于重平衡任务
-    let redis_client = redis::Client::open(config.redis_conn_str.clone())?;
+    let redis_client = redis::Client::open(config.redis.redis_conn_str.clone())?;
     let redis_conn = redis_client.get_connection_manager().await?;
 
     // 添加Redis消息重平衡任务 - 每10秒执行一次

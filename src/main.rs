@@ -13,7 +13,7 @@ use web_service::start_web_service;
 use color_eyre::eyre::Context;
 use color_eyre::Result;
 use consumer_service::start_job_consumers;
-use cronjob_service::{start_cron_tasks, CronConfig};
+use cronjob_service::start_cron_tasks;
 use database::initialize_database;
 use shared_lib::models::config::AppConfig;
 use std::sync::Arc;
@@ -43,11 +43,6 @@ async fn main() -> Result<()> {
     // 优雅退出通知机制，通过watch来通知需要感知的协程优雅退出
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
-    // 创建 CronConfig
-    let cron_config = Arc::new(CronConfig {
-        redis_conn_str: conf.redis.redis_conn_str.clone(),
-    });
-
     // 如果有任何一个服务启动失败，那么应该会退出并打印错误信息
     _ = try_join!(
         start_shutdown_signal(shutdown_tx),
@@ -56,7 +51,7 @@ async fn main() -> Result<()> {
         // 启动redis-consumer服务
         start_job_consumers(Arc::clone(&conf), shutdown_rx.clone()),
         // 启动cron-jobs服务
-        start_cron_tasks(cron_config, shutdown_rx.clone()),
+        start_cron_tasks(Arc::clone(&conf), shutdown_rx.clone()),
     )?;
 
     info!("rust backend exit successfully");
