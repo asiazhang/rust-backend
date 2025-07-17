@@ -1,0 +1,29 @@
+[package]
+name = "web-service"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# 从workspace继承的依赖
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+axum = { workspace = true }
+sqlx = { workspace = true }
+redis = { workspace = true }
+chrono = { workspace = true }
+dotenvy = { workspace = true }
+async-trait = { workspace = true }
+color-eyre = { workspace = true }
+validator = { workspace = true }
+
+# Web服务特有的依赖
+utoipa = { version = "5.3.0", features = ["axum_extras", "openapi_extensions", "time"] }
+utoipa-axum = "0.2.0"
+utoipa-scalar = { version = "0.3.0", features = ["axum"] }
