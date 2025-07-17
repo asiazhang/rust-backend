@@ -4,9 +4,13 @@
 
 pub mod connection;
 pub mod error;
+pub mod models;
+pub mod repositories;
 
 pub use connection::*;
 pub use error::DatabaseError;
+pub use models::project::*;
+pub use repositories::{project::ProjectRepository, traits::ProjectRepositoryTrait};
 
 /// 数据库操作结果类型
 pub type DatabaseResult<T> = Result<T, DatabaseError>;

@@ -3,6 +3,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use color_eyre::eyre::Error;
+use database::DatabaseError;
 use redis::RedisError;
 use thiserror::Error;
 use validator::ValidationErrors;
@@ -18,6 +19,10 @@ pub enum AppError {
     /// 数据库错误
     #[error(transparent)]
     DatabaseError(#[from] sqlx::Error),
+
+    /// 仓库层数据库错误
+    #[error(transparent)]
+    RepositoryError(#[from] DatabaseError),
 
     #[error(transparent)]
     RedisError(#[from] RedisError),
@@ -35,6 +40,12 @@ impl IntoResponse for AppError {
             AppError::DatabaseError(err) => match err {
                 sqlx::Error::RowNotFound => (StatusCode::NOT_FOUND, format!("Can not found resource: {err}")).into_response(),
                 _ => (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {err}")).into_response(),
+            },
+            AppError::RepositoryError(err) => match err {
+                DatabaseError::SqlxError(sqlx::Error::RowNotFound) => (StatusCode::NOT_FOUND, format!("Record not found: {err}")).into_response(),
+                DatabaseError::NotFound(msg) => (StatusCode::NOT_FOUND, format!("Resource not found: {msg}")).into_response(),
+                DatabaseError::ValidationError(msg) => (StatusCode::BAD_REQUEST, format!("Validation error: {msg}")).into_response(),
+                _ => (StatusCode::INTERNAL_SERVER_ERROR, format!("Repository error: {err}")).into_response(),
             },
             AppError::RedisError(err) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Redis error: {err}")).into_response(),
             AppError::InternalError(err) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Something went wrong: {err}")).into_response(),

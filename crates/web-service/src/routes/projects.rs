@@ -8,6 +8,7 @@ use crate::models::projects::{ProjectCreate, ProjectInfo, ProjectSearch, Project
 use axum::extract::{Path, State};
 use axum::Json;
 use color_eyre::Result;
+use database::{ProjectRepository, ProjectRepositoryTrait};
 use std::sync::Arc;
 use tracing::debug;
 use validator::Validate;
@@ -58,51 +59,35 @@ pub async fn find_projects(
     State(state): State<Arc<AppState>>,
     Json(search): Json<ProjectSearch>,
 ) -> Result<Json<ReplyList<ProjectInfo>>, AppError> {
-    debug!("Searching projects {:#?}", search);
+    debug!("🔍 搜索项目 {:#?}", search);
 
     // 验证输入参数，确保有效性
     search.validate()?;
 
-    // 这里name需要clone一次，因为后面会使用两次name，导致重复消费
-    let name = search.project_name.clone();
-
     // saturating_sub(1)会保证结果>=0，不会出现溢出
     let offset = (search.page_query.page_index.saturating_sub(1)) * search.page_query.page_size;
 
-    // 具体sqlx的好处可以参考上面的注释
-    let rows = sqlx::query!(
-        r#"
-WITH filtered_projects AS (SELECT id,
-                                  project_name,
-                                  comment,
-                                  COUNT(*) OVER () as total_count
-                           FROM hm.projects
-                           WHERE (COALESCE($1, '') = '' OR project_name LIKE $2)
-                           LIMIT $3 OFFSET $4)
-SELECT id,
-       project_name,
-       comment,
-       total_count
-FROM filtered_projects;
-    "#,
-        name.unwrap_or("".to_string()),
-        search.project_name.map(|n| format!("%{}%", n)).unwrap_or_default(),
+    // 创建项目仓库实例
+    let project_repo = ProjectRepository::new(state.db_pool.clone());
+
+    // 调用仓库方法执行搜索
+    let result = project_repo.find_projects(
+        search.project_name.clone(),
         search.page_query.page_size as i64,
         offset as i64,
-    )
-    .fetch_all(&state.db_pool)
-    .await?; // 异步操作需要使用.await，?会将错误直接传播到上层，转换为http错误
+    ).await?;
 
-    // 获取总数和分页数据
-    let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u32;
-    let projects = rows
-        .into_iter() // Vec<Record>转换为迭代器
-        .map(|r| ProjectInfo {
-            id: r.id,
-            project_name: r.project_name,
-            comment: r.comment,
-        }) // 使用map将数据库Record对象转换为ProjectInfo对象
-        .collect(); // 转换回Vec
+    // 将数据库 ProjectInfo 转换为 web-service 的 ProjectInfo
+    let projects = result.projects
+        .into_iter()
+        .map(|db_project| ProjectInfo {
+            id: db_project.id,
+            project_name: db_project.project_name,
+            comment: db_project.comment,
+        })
+        .collect();
+
+    let total = result.total;
 
     // 使用OK返回成功的结果
     Ok(Json(ReplyList {

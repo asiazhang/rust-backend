@@ -447,6 +447,7 @@ dependencies = [
 name = "database"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "shared-lib",
  "sqlx",
  "thiserror",
@@ -2527,6 +2528,7 @@ dependencies = [
  "axum",
  "chrono",
  "color-eyre",
+ "database",
  "dotenvy",
  "redis",
  "serde",
