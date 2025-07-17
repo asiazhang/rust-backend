@@ -9,10 +9,10 @@
 //!
 //! 所有代码都放在一个程序中，方便部署和维护(适用于小型系统)
 
-use crate::crons::start_cron_tasks;
-use crate::models::config::AppConfig;
+// 使用外部 crates 中的功能
+use consumer_service::start_job_consumers;
+use share_lib::models::config::AppConfig;
 use crate::routes::start_axum_server;
-use crate::tasks::start_job_consumers;
 use color_eyre::Result;
 use color_eyre::eyre::Context;
 use sqlx::postgres::PgPoolOptions;
@@ -23,10 +23,15 @@ use tokio::sync::watch::Sender;
 use tokio::{signal, try_join};
 use tracing::info;
 
-mod crons;
 mod models;
 mod routes;
-mod tasks;
+
+// 临时函数，用于兼容性
+async fn start_cron_tasks(_config: Arc<AppConfig>, _shutdown_rx: tokio::sync::watch::Receiver<bool>) -> Result<()> {
+    // 临时实现，实际应该调用 cronjob-service 中的函数
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    Ok(())
+}
 
 /// 入口函数
 ///

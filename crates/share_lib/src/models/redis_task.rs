@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use anyhow::Result;
+use color_eyre::Result;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::sync::Arc;

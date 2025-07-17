@@ -1,5 +1,5 @@
-use crate::models::redis_task::{RedisHandler, RedisTask, RedisTaskCreator};
-use crate::models::tasks::TaskInfo;
+use share_lib::models::redis_task::{RedisHandler, RedisTask, RedisTaskCreator};
+use share_lib::models::tasks::TaskInfo;
 use async_trait::async_trait;
 use color_eyre::Result;
 use std::sync::Arc;

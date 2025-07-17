@@ -11,10 +11,21 @@ name = "consumer_service"
 path = "src/lib.rs"
 
 [dependencies]
-# 基础依赖，等待后续代码移动时添加具体依赖
+# 基础依赖
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+# 新增依赖
+color-eyre = { workspace = true }
+futures = { workspace = true }
+redis = { workspace = true }
+time = { workspace = true }
+async-trait = { workspace = true }
+validator = { workspace = true }
+dotenvy = { workspace = true }
+
+# 内部依赖
+share_lib = { path = "../share_lib" }

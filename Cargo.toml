@@ -1,3 +1,33 @@
+[package]
+name = "rust-backend"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# 内部依赖
+share_lib = { path = "crates/share_lib" }
+consumer-service = { path = "crates/consumer-service" }
+
+# 外部依赖
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+color-eyre = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+sqlx = { workspace = true }
+axum = { workspace = true }
+async-trait = { workspace = true }
+validator = { workspace = true }
+redis = { workspace = true }
+thiserror = { workspace = true }
+utoipa = "5.2.0"
+utoipa-axum = "0.2.0"
+utoipa-scalar = "0.2.0"
+
 [workspace]
 members = [
     "crates/web-service",
