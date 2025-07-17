@@ -53,17 +53,13 @@ impl AppConfig {
         let config = AppConfig {
             postgresql_conn_str: db_url,
             redis: RedisConfig {
-                max_consumer_count: std::env::var("MAX_CONSUMER_COUNT")
-                    .map_or(5, |s| s.parse().unwrap_or(5)),
+                max_consumer_count: std::env::var("MAX_CONSUMER_COUNT").map_or(5, |s| s.parse().unwrap_or(5)),
                 redis_conn_str: redis_url,
-                max_redis_pool_size: std::env::var("MAX_REDIS_POOL_SIZE")
-                    .map_or(16, |s| s.parse().unwrap_or(16)),
+                max_redis_pool_size: std::env::var("MAX_REDIS_POOL_SIZE").map_or(16, |s| s.parse().unwrap_or(16)),
             },
         };
 
-        config
-            .validate()
-            .context(format!("Validate app config: {config:?}"))?;
+        config.validate().context(format!("Validate app config: {config:?}"))?;
 
         Ok(Arc::new(config))
     }

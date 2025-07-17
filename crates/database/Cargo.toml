@@ -1,0 +1,17 @@
+[package]
+name = "database"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# 内部依赖
+shared-lib = { path = "../shared-lib" }
+
+# 外部依赖
+sqlx = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

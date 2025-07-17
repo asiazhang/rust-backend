@@ -1,0 +1,27 @@
+[package]
+name = "cronjob-service"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "cronjob_service"
+path = "src/lib.rs"
+
+[dependencies]
+# 从workspace继承的依赖
+tokio = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+redis = { workspace = true }
+chrono = { workspace = true }
+color-eyre = { workspace = true }
+
+# Cronjob服务特有的依赖
+tokio-cron-scheduler = "0.14.0"
+
+# 添加 shared-lib 依赖
+shared-lib = { path = "../shared-lib" }

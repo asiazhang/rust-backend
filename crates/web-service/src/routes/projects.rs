@@ -1,13 +1,12 @@
 //! 项目相关接口
 //!
 
-use crate::models::app::AppState;
-use crate::models::common::Reply;
-use crate::models::common::ReplyList;
+use crate::AppState;
+use crate::models::common::{Reply, ReplyList};
 use crate::models::err::AppError;
 use crate::models::projects::{ProjectCreate, ProjectInfo, ProjectSearch, ProjectUpdate};
-use axum::Json;
 use axum::extract::{Path, State};
+use axum::Json;
 use color_eyre::Result;
 use std::sync::Arc;
 use tracing::debug;
@@ -33,7 +32,8 @@ use validator::Validate;
 ///
 /// ## 返回值
 ///
-/// 返回值的类型是 [`Result<Json<ReplyList<ProjectInfo>>, AppError>`] 初次接触时可能会比较复杂，我们一层层解释下：
+/// 返回值的类型是 [`Result<Json<ReplyList<ProjectInfo>>, AppError>`]。
+/// 在1.0.124其内部封装了以下几个关键：
 ///
 /// 1. [`Result`] 使用 [`anyhow::Result`] 对返回结果进行封装，方便使用 `?` 进行错误传播
 /// 2. [`Json`] 会对内部类型进行json序列化，保证返回的数据是一个合法的json字符串
@@ -41,31 +41,10 @@ use validator::Validate;
 /// 4. [`ProjectInfo`] 是实际的业务返回对象
 /// 5. [`AppError`] 是错误时返回的Error类型，会自动转换为500错误信息
 ///
-/// ## SQLx
+/// 使用case:
 ///
-/// 这里通过sqlx来组装sql查询语句，特点如下：
-///
-/// ### 静态宏检查
-/// [`sqlx::query`]宏会在编译期会对sql语句进行检查（发送到数据库），确保sql的有效性。
-///
-/// ### 分页查询
-/// 通过`COUNT(*) OVER () as total_count` + `WITH` 语法，可以一次性将数据和总数都查询出来，很方便。
-///
-/// ### 条件查询
-/// 在以往我们经常会遇到这种场景：用户如果传入A，则进行过滤，否则不过滤，比如模糊搜索：
-///
-/// 在`postgres`中可以这样实现:
-///
-/// ```
-/// WHERE (COALESCE($1, '') = '' OR project_name LIKE $2)
-/// ```
-///
-/// $1和$2基本上是一个值。生成的查询语句如下：
-///
-/// - 如果是None，那么会展开为：`WHERE '' = '' OR project_name LIKE %%`，这个会被简化为真值，直接被查询引擎优化掉
-/// - 如果是字符串A，那么会展开为: `WHERE 'A' = '' OR project_name LIKE %A%`，这个会被简化为`WHERE project_name LIKE %A%`
-///
-/// 所以我们不用再像其他框架里面使用`if`来拼接了！
+/// - 使用 `routes!(get, get, post)`
+/// - 其中使用 r#""## 查看 quote原因，后续不会详细写
 #[utoipa::path(post,
     path = "/search-projects",
     tag = "projects",
@@ -107,10 +86,7 @@ SELECT id,
 FROM filtered_projects;
     "#,
         name.unwrap_or("".to_string()),
-        search
-            .project_name
-            .map(|n| format!("%{}%", n))
-            .unwrap_or_default(),
+        search.project_name.map(|n| format!("%{}%", n)).unwrap_or_default(),
         search.page_query.page_size as i64,
         offset as i64,
     )
@@ -174,10 +150,7 @@ returning id, project_name, comment;
 /// 查询指定项目信息
 #[utoipa::path(get, path = "/projects/{id}", tag = "projects")]
 #[axum::debug_handler]
-pub async fn get_project(
-    State(_state): State<Arc<AppState>>,
-    Path(project_id): Path<i32>,
-) -> Result<Json<ProjectInfo>, AppError> {
+pub async fn get_project(State(_state): State<Arc<AppState>>, Path(project_id): Path<i32>) -> Result<Json<ProjectInfo>, AppError> {
     debug!("Creating project id {:#?}", project_id);
 
     let project = sqlx::query_as!(
@@ -207,7 +180,6 @@ limit 1
 /// 两个好处：
 /// - 防止前端输入了空数据，导致数据被误清除
 /// - 不用`if`拼接的方式，代码可维护性更好
-///
 #[utoipa::path(patch, path = "/projects/{id}", tag = "projects")]
 #[axum::debug_handler]
 pub async fn update_project(
@@ -240,10 +212,7 @@ returning id, project_name, comment;
 /// 删除指定的项目
 #[utoipa::path(delete, path = "/projects/{id}", tag = "projects")]
 #[axum::debug_handler]
-pub async fn delete_project(
-    State(state): State<Arc<AppState>>,
-    Path(project_id): Path<i32>,
-) -> Result<Json<ProjectInfo>, AppError> {
+pub async fn delete_project(State(state): State<Arc<AppState>>, Path(project_id): Path<i32>) -> Result<Json<ProjectInfo>, AppError> {
     debug!("delete project {:#?}", project_id);
 
     let project = sqlx::query_as!(

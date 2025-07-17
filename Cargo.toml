@@ -1,28 +1,70 @@
 [package]
 name = "rust-backend"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
-async-trait = "0.1.83"
-axum = { version = "0.8.1", features = ["macros"] }
-color-eyre = "0.6.3"
-dotenvy = "0.15.7"
-futures = "0.3.31"
-redis = { version = "0.31", features = ["connection-manager", "tokio-comp"] }
-serde = { version = "1.0.216", features = ["derive"] }
-serde_json = "1.0.133"
-sqlx = { version = "0.8.2", features = ["macros", "migrate", "postgres", "runtime-tokio"] }
-thiserror = "2.0.8"
-time = "0.3.37"
-tokio = { version = "1.42.0", features = ["full"] }
-tracing = "0.1.41"
-chrono = { version = "0.4", features = ["serde"] }
-rand = "0.8"
-anyhow = "1.0"
-tracing-subscriber = "0.3.19"
-tokio-cron-scheduler = "0.14.0"
+# 内部依赖
+shared-lib = { path = "crates/shared-lib" }
+consumer-service = { path = "crates/consumer-service" }
+cronjob-service = { path = "crates/cronjob-service" }
+database = { path = "crates/database" }
+web-service = { path = "crates/web-service" }
+
+# 外部依赖
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+color-eyre = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+sqlx = { workspace = true }
+axum = { workspace = true }
+async-trait = { workspace = true }
+validator = { workspace = true }
+redis = { workspace = true }
+thiserror = { workspace = true }
 utoipa = { version = "5.3.0", features = ["axum_extras", "openapi_extensions", "time"] }
 utoipa-axum = "0.2.0"
 utoipa-scalar = { version = "0.3.0", features = ["axum"] }
+
+[workspace]
+members = [
+    "crates/web-service",
+    "crates/consumer-service",
+    "crates/cronjob-service",
+    "crates/shared-lib",
+    "crates/database"
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT"
+repository = "https://github.com/yourusername/rust-backend"
+
+[workspace.dependencies]
+# 共享依赖
+tokio = { version = "1.42.0", features = ["full"] }
+serde = { version = "1.0.216", features = ["derive"] }
+serde_json = "1.0.133"
+anyhow = "1.0"
+thiserror = "2.0.8"
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+axum = { version = "0.8.1", features = ["macros"] }
+sqlx = { version = "0.8.2", features = ["macros", "migrate", "postgres", "runtime-tokio"] }
+redis = { version = "0.31", features = ["connection-manager", "tokio-comp"] }
+chrono = { version = "0.4", features = ["serde"] }
+dotenvy = "0.15.7"
+async-trait = "0.1.83"
+color-eyre = "0.6.3"
+futures = "0.3.31"
+time = "0.3.37"
+rand = "0.8"
 validator = { version = "0.20.0", features = ["derive"] }
