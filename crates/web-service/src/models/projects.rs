@@ -44,6 +44,17 @@ pub struct ProjectInfo {
     pub comment: String,
 }
 
+/// 从数据库层的 ProjectInfo 转换为 web-service 层的 ProjectInfo
+impl From<database::models::ProjectInfo> for ProjectInfo {
+    fn from(db_project: database::models::ProjectInfo) -> Self {
+        Self {
+            id: db_project.id,
+            project_name: db_project.project_name,
+            comment: db_project.comment,
+        }
+    }
+}
+
 /// 更新项目的信息
 #[derive(Deserialize, Debug, ToSchema, Serialize)]
 pub struct ProjectUpdate {

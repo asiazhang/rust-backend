@@ -1,10 +1,10 @@
 //! 项目相关接口
 //!
 
-use crate::AppState;
 use crate::models::common::{Reply, ReplyList};
 use crate::models::err::AppError;
 use crate::models::projects::{ProjectCreate, ProjectInfo, ProjectSearch, ProjectUpdate};
+use crate::AppState;
 use axum::extract::{Path, State};
 use axum::Json;
 use color_eyre::Result;
@@ -71,28 +71,14 @@ pub async fn find_projects(
     let project_repo = ProjectRepository::new(state.db_pool.clone());
 
     // 调用仓库方法执行搜索
-    let result = project_repo.find_projects(
-        search.project_name.clone(),
-        search.page_query.page_size as i64,
-        offset as i64,
-    ).await?;
-
-    // 将数据库 ProjectInfo 转换为 web-service 的 ProjectInfo
-    let projects = result.projects
-        .into_iter()
-        .map(|db_project| ProjectInfo {
-            id: db_project.id,
-            project_name: db_project.project_name,
-            comment: db_project.comment,
-        })
-        .collect();
-
-    let total = result.total;
+    let result = project_repo
+        .find_projects(search.project_name.clone(), search.page_query.page_size as i64, offset as i64)
+        .await?;
 
     // 使用OK返回成功的结果
     Ok(Json(ReplyList {
-        total,
-        data: projects,
+        total: result.total,
+        data: result.projects.into_iter().map(Into::into).collect(),
         page_size: search.page_query.page_size,
         page_index: search.page_query.page_index,
     }))
@@ -115,42 +101,27 @@ pub async fn create_project(
 ) -> Result<Json<Reply<ProjectInfo>>, AppError> {
     debug!("Creating project {:#?}", project);
 
-    // query_as!可以直接将Record结果对象转换为类型对象
-    let project = sqlx::query_as!(
-        ProjectInfo,
-        r#"
-insert into hm.projects (project_name, comment, created_at, updated_at)
-values ($1, $2, now(), now())
-returning id, project_name, comment;
-    "#,
-        project.project_name,
-        project.comment
-    )
-    .fetch_one(&state.db_pool)
-    .await?;
+    // 创建项目仓库实例
+    let project_repo = ProjectRepository::new(state.db_pool.clone());
+    let db_project = database::models::ProjectCreate {
+        project_name: project.project_name,
+        comment: project.comment,
+    };
+    let project = project_repo.create_project(db_project).await?;
 
-    Ok(Json(Reply { data: project }))
+    Ok(Json(Reply { data: project.into() }))
 }
 
 /// 查询指定项目信息
 #[utoipa::path(get, path = "/projects/{id}", tag = "projects")]
 #[axum::debug_handler]
-pub async fn get_project(State(_state): State<Arc<AppState>>, Path(project_id): Path<i32>) -> Result<Json<ProjectInfo>, AppError> {
-    debug!("Creating project id {:#?}", project_id);
+pub async fn get_project(State(state): State<Arc<AppState>>, Path(project_id): Path<i32>) -> Result<Json<ProjectInfo>, AppError> {
+    debug!("Getting project id {:#?}", project_id);
 
-    let project = sqlx::query_as!(
-        ProjectInfo,
-        r#"
-select id, project_name, comment from hm.projects
-where id = $1
-limit 1
-    "#,
-        project_id
-    )
-    .fetch_one(&_state.db_pool)
-    .await?;
+    let project_repo = ProjectRepository::new(state.db_pool.clone());
+    let project = project_repo.get_project_by_id(project_id).await?;
 
-    Ok(Json(project))
+    Ok(Json(project.into()))
 }
 
 /// 更新项目信息
@@ -174,24 +145,14 @@ pub async fn update_project(
 ) -> Result<Json<ProjectInfo>, AppError> {
     debug!("Updating project {} with {:#?}", project_id, info);
 
-    let project = sqlx::query_as!(
-        ProjectInfo,
-        r#"
-update hm.projects
-set project_name = coalesce($2, project_name),
-    comment = coalesce($3, comment),
-    updated_at=now()
-where id = $1
-returning id, project_name, comment;
-        "#,
-        project_id,
-        info.project_name,
-        info.comment,
-    )
-    .fetch_one(&state.db_pool)
-    .await?;
+    let project_repo = ProjectRepository::new(state.db_pool.clone());
+    let db_update = database::models::ProjectUpdate {
+        project_name: info.project_name,
+        comment: info.comment,
+    };
+    let project = project_repo.update_project(project_id, db_update).await?;
 
-    Ok(Json(project))
+    Ok(Json(project.into()))
 }
 
 /// 删除指定的项目
@@ -200,18 +161,8 @@ returning id, project_name, comment;
 pub async fn delete_project(State(state): State<Arc<AppState>>, Path(project_id): Path<i32>) -> Result<Json<ProjectInfo>, AppError> {
     debug!("delete project {:#?}", project_id);
 
-    let project = sqlx::query_as!(
-        ProjectInfo,
-        r#"
-delete
-from hm.projects
-where id = $1
-returning id, project_name, comment;
-    "#,
-        project_id
-    )
-    .fetch_one(&state.db_pool)
-    .await?;
+    let project_repo = ProjectRepository::new(state.db_pool.clone());
+    let project = project_repo.delete_project(project_id).await?;
 
-    Ok(Json(project))
+    Ok(Json(project.into()))
 }
