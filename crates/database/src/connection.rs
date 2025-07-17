@@ -27,19 +27,19 @@ pub async fn initialize_database(config: Arc<AppConfig>) -> DatabaseResult<Datab
         .test_before_acquire(true)
         .connect(&config.postgresql_conn_str)
         .await
-        .map_err(|e| DatabaseError::connection(format!("连接PostgreSQL数据库失败: {}", e)))?;
+        .map_err(|e| DatabaseError::connection(format!("连接PostgreSQL数据库失败: {e}")))?;
 
     info!("🗄️ 数据库连接池创建成功");
-    
+
     // 执行数据库迁移
     info!("🔄 开始执行数据库迁移...");
-    
+
     sqlx::migrate!("../../migrations")
         .run(&pool)
         .await
-        .map_err(|e| DatabaseError::migration(format!("数据库迁移失败: {}", e)))?;
-    
+        .map_err(|e| DatabaseError::migration(format!("数据库迁移失败: {e}")))?;
+
     info!("✅ 数据库迁移完成");
-    
+
     Ok(pool)
 }

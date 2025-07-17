@@ -10,9 +10,7 @@ use crate::routes::projects::__path_delete_project;
 use crate::routes::projects::__path_find_projects;
 use crate::routes::projects::__path_get_project;
 use crate::routes::projects::__path_update_project;
-use crate::routes::projects::{
-    create_project, delete_project, find_projects, get_project, update_project,
-};
+use crate::routes::projects::{create_project, delete_project, find_projects, get_project, update_project};
 use crate::routes::users::__path_create_user;
 use crate::routes::users::__path_delete_user;
 use crate::routes::users::__path_find_users;
@@ -33,10 +31,7 @@ use utoipa_scalar::{Scalar, Servable};
 pub mod projects;
 pub mod users;
 
-pub async fn start_axum_server(
-    pool: Pool<Postgres>,
-    mut shutdown_rx: Receiver<bool>,
-) -> Result<()> {
+pub async fn start_axum_server(pool: Pool<Postgres>, mut shutdown_rx: Receiver<bool>) -> Result<()> {
     // 使用官方推荐的[共享状态方式](https://docs.rs/axum/latest/axum/#sharing-state-with-handlers)来在
     // 不同的web处理器之间同步，主要是需要共享数据库连接池
     let shared_state = Arc::new(AppState { db_pool: pool });
@@ -51,10 +46,7 @@ pub async fn start_axum_server(
     axum::serve(listener, router.into_make_service())
         // 设置优雅退出处理器，当后面的shutdown_signal异步操作结束后，axum也退出
         .with_graceful_shutdown(async move {
-            shutdown_rx
-                .changed()
-                .await
-                .expect("Failed to receive shutdown signal");
+            shutdown_rx.changed().await.expect("Failed to receive shutdown signal");
         })
         .await?;
 
@@ -87,12 +79,7 @@ pub async fn start_axum_server(
 fn routers(state: Arc<AppState>) -> OpenApiRouter {
     OpenApiRouter::new()
         .routes(routes!(find_projects))
-        .routes(routes!(
-            get_project,
-            create_project,
-            update_project,
-            delete_project
-        ))
+        .routes(routes!(get_project, create_project, update_project, delete_project))
         .routes(routes!(find_users))
         .routes(routes!(get_user, create_user, update_user, delete_user))
         .with_state(state)

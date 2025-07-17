@@ -1,7 +1,7 @@
-use share_lib::models::redis_task::{RedisHandler, RedisTask, RedisTaskCreator};
-use share_lib::models::tasks::TaskInfo;
 use async_trait::async_trait;
 use color_eyre::Result;
+use share_lib::models::redis_task::{RedisHandler, RedisTask, RedisTaskCreator};
+use share_lib::models::tasks::TaskInfo;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::debug;

@@ -1,4 +1,4 @@
-use axum::{response::Json, extract::Query};
+use axum::{extract::Query, response::Json};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::instrument;
@@ -20,7 +20,7 @@ pub struct User {
 pub async fn list_users(Query(query): Query<ListUsersQuery>) -> Json<Value> {
     let page = query.page.unwrap_or(1);
     let limit = query.limit.unwrap_or(10);
-    
+
     // 模拟用户数据
     let users = vec![
         User {
@@ -34,7 +34,7 @@ pub async fn list_users(Query(query): Query<ListUsersQuery>) -> Json<Value> {
             email: "lisi@example.com".to_string(),
         },
     ];
-    
+
     Json(json!({
         "data": users,
         "pagination": {

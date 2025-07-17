@@ -1,4 +1,4 @@
-use axum::{response::Json, extract::Query};
+use axum::{extract::Query, response::Json};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::instrument;
@@ -21,7 +21,7 @@ pub struct Project {
 pub async fn list_projects(Query(query): Query<ListProjectsQuery>) -> Json<Value> {
     let page = query.page.unwrap_or(1);
     let limit = query.limit.unwrap_or(10);
-    
+
     // 模拟项目数据
     let projects = vec![
         Project {
@@ -37,7 +37,7 @@ pub async fn list_projects(Query(query): Query<ListProjectsQuery>) -> Json<Value
             status: "inactive".to_string(),
         },
     ];
-    
+
     Json(json!({
         "data": projects,
         "pagination": {

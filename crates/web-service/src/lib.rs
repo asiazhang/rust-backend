@@ -1,12 +1,8 @@
-pub mod routes;
 pub mod handlers;
 pub mod middleware;
+pub mod routes;
 
-use axum::{
-    response::Json,
-    routing::get,
-    Router,
-};
+use axum::{response::Json, routing::get, Router};
 use serde_json::{json, Value};
 use tracing::{info, instrument};
 
@@ -22,15 +18,15 @@ pub fn create_app() -> Router {
 /// 启动Web服务
 pub async fn start_server(port: u16) -> anyhow::Result<()> {
     info!("🚀 启动 Web Service...");
-    
+
     let app = create_app();
-    
+
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
         .expect("Failed to bind to address");
-    
+
     info!("📡 Web Service 正在监听 http://0.0.0.0:{}", port);
-    
+
     axum::serve(listener, app).await?;
     Ok(())
 }

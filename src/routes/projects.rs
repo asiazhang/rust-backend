@@ -6,8 +6,8 @@ use crate::models::common::Reply;
 use crate::models::common::ReplyList;
 use crate::models::err::AppError;
 use crate::models::projects::{ProjectCreate, ProjectInfo, ProjectSearch, ProjectUpdate};
-use axum::Json;
 use axum::extract::{Path, State};
+use axum::Json;
 use color_eyre::Result;
 use std::sync::Arc;
 use tracing::debug;
@@ -107,10 +107,7 @@ SELECT id,
 FROM filtered_projects;
     "#,
         name.unwrap_or("".to_string()),
-        search
-            .project_name
-            .map(|n| format!("%{}%", n))
-            .unwrap_or_default(),
+        search.project_name.map(|n| format!("%{}%", n)).unwrap_or_default(),
         search.page_query.page_size as i64,
         offset as i64,
     )
@@ -174,10 +171,7 @@ returning id, project_name, comment;
 /// 查询指定项目信息
 #[utoipa::path(get, path = "/projects/{id}", tag = "projects")]
 #[axum::debug_handler]
-pub async fn get_project(
-    State(_state): State<Arc<AppState>>,
-    Path(project_id): Path<i32>,
-) -> Result<Json<ProjectInfo>, AppError> {
+pub async fn get_project(State(_state): State<Arc<AppState>>, Path(project_id): Path<i32>) -> Result<Json<ProjectInfo>, AppError> {
     debug!("Creating project id {:#?}", project_id);
 
     let project = sqlx::query_as!(
@@ -240,10 +234,7 @@ returning id, project_name, comment;
 /// 删除指定的项目
 #[utoipa::path(delete, path = "/projects/{id}", tag = "projects")]
 #[axum::debug_handler]
-pub async fn delete_project(
-    State(state): State<Arc<AppState>>,
-    Path(project_id): Path<i32>,
-) -> Result<Json<ProjectInfo>, AppError> {
+pub async fn delete_project(State(state): State<Arc<AppState>>, Path(project_id): Path<i32>) -> Result<Json<ProjectInfo>, AppError> {
     debug!("delete project {:#?}", project_id);
 
     let project = sqlx::query_as!(

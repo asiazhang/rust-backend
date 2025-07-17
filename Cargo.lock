@@ -1545,6 +1545,7 @@ dependencies = [
  "axum",
  "color-eyre",
  "consumer-service",
+ "cronjob-service",
  "database",
  "redis",
  "serde",

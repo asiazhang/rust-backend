@@ -5,19 +5,19 @@
 pub mod task_type_a;
 pub mod task_type_b;
 
-use share_lib::models::config::AppConfig;
-use share_lib::models::redis_task::{RedisConsumerHeartBeat, RedisTask, RedisTaskCreator};
-use share_lib::models::redis_constants::{CONSUMER_HEARTBEAT_KEY, CONSUMER_GROUP_NAME, HEARTBEAT_INTERVAL_SECONDS};
 use self::task_type_a::TaskTypeACreator;
 use self::task_type_b::TaskTypeBCreator;
-use color_eyre::Result;
 use color_eyre::eyre::Context;
-use futures::StreamExt;
+use color_eyre::Result;
 use futures::future::try_join_all;
 use futures::stream::iter;
+use futures::StreamExt;
 use redis::aio::ConnectionManager;
 use redis::streams::{StreamId, StreamReadOptions, StreamReadReply};
 use redis::{AsyncCommands, RedisError, RedisResult, Value};
+use share_lib::models::config::AppConfig;
+use share_lib::models::redis_constants::{CONSUMER_GROUP_NAME, CONSUMER_HEARTBEAT_KEY, HEARTBEAT_INTERVAL_SECONDS};
+use share_lib::models::redis_task::{RedisConsumerHeartBeat, RedisTask, RedisTaskCreator};
 use std::sync::Arc;
 use std::time::Duration;
 use time::OffsetDateTime;
@@ -65,26 +65,15 @@ use tracing::{debug, error, info, trace, warn};
 /// - 需要生成比较多的消费者
 /// - 需要比较多的redis链接（特别是当前每个Redis消费者需要2个链接）
 ///
-pub async fn start_job_consumers(
-    app_config: Arc<AppConfig>,
-    shutdown_rx: Receiver<bool>,
-) -> Result<()> {
+pub async fn start_job_consumers(app_config: Arc<AppConfig>, shutdown_rx: Receiver<bool>) -> Result<()> {
     info!(
         "Starting redis job consumers with redis info {}...",
         &app_config.redis.redis_conn_str
     );
 
     try_join!(
-        guard_start_create_task_consumers(
-            Arc::clone(&app_config),
-            TaskTypeACreator::new_redis_task(),
-            shutdown_rx.clone()
-        ),
-        guard_start_create_task_consumers(
-            Arc::clone(&app_config),
-            TaskTypeBCreator::new_redis_task(),
-            shutdown_rx.clone()
-        )
+        guard_start_create_task_consumers(Arc::clone(&app_config), TaskTypeACreator::new_redis_task(), shutdown_rx.clone()),
+        guard_start_create_task_consumers(Arc::clone(&app_config), TaskTypeBCreator::new_redis_task(), shutdown_rx.clone())
     )?;
 
     info!("Redis job consumers stopped");
@@ -93,10 +82,7 @@ pub async fn start_job_consumers(
 }
 
 async fn new_redis_connection_manager(conn_str: &str) -> Result<ConnectionManager> {
-    Ok(ConnectionManager::new(redis::Client::open(
-        conn_str,
-    )?)
-    .await?)
+    Ok(ConnectionManager::new(redis::Client::open(conn_str)?).await?)
 }
 
 async fn guard_start_create_task_consumers(
@@ -105,12 +91,7 @@ async fn guard_start_create_task_consumers(
     shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
     loop {
-        let re = start_create_task_consumers(
-            Arc::clone(&app_config),
-            Arc::clone(&redis_task),
-            shutdown_rx.clone(),
-        )
-        .await;
+        let re = start_create_task_consumers(Arc::clone(&app_config), Arc::clone(&redis_task), shutdown_rx.clone()).await;
         match re {
             Ok(_) => break,
             Err(err) => {
@@ -124,11 +105,7 @@ async fn guard_start_create_task_consumers(
     Ok(())
 }
 
-async fn start_create_task_consumers(
-    app_config: Arc<AppConfig>,
-    redis_task: Arc<RedisTask>,
-    shutdown_rx: Receiver<bool>,
-) -> Result<()> {
+async fn start_create_task_consumers(app_config: Arc<AppConfig>, redis_task: Arc<RedisTask>, shutdown_rx: Receiver<bool>) -> Result<()> {
     create_task_group(app_config.redis.redis_conn_str.clone(), &redis_task).await?;
 
     let consumers: Vec<_> = (0..app_config.redis.max_consumer_count)
@@ -144,10 +121,9 @@ async fn start_create_task_consumers(
         })
         .collect();
 
-    try_join_all(consumers).await.context(format!(
-        "wait for all consumer [{}] end",
-        redis_task.consumer_name_template
-    ))?;
+    try_join_all(consumers)
+        .await
+        .context(format!("wait for all consumer [{}] end", redis_task.consumer_name_template))?;
 
     Ok(())
 }
@@ -176,22 +152,10 @@ async fn consumer_task_worker_with_heartbeat(
 ) -> Result<()> {
     let conn = new_redis_connection_manager(&conn_str).await?;
     _ = try_join!(
-        consumer_task_send_heartbeat(
-            conn.clone(),
-            Arc::clone(&redis_task),
-            consumer_name.clone(),
-            shutdown_rx.clone()
-        ),
-        consumer_task_worker(
-            conn.clone(),
-            Arc::clone(&redis_task),
-            consumer_name.clone(),
-            shutdown_rx.clone()
-        ),
+        consumer_task_send_heartbeat(conn.clone(), Arc::clone(&redis_task), consumer_name.clone(), shutdown_rx.clone()),
+        consumer_task_worker(conn.clone(), Arc::clone(&redis_task), consumer_name.clone(), shutdown_rx.clone()),
     )
-    .context(format!(
-        "Creating consumer {consumer_name} with auto heartbeat"
-    ))?;
+    .context(format!("Creating consumer {consumer_name} with auto heartbeat"))?;
 
     Ok(())
 }
@@ -286,24 +250,16 @@ async fn xread_group(
     opts: &StreamReadOptions,
     redis_task: &Arc<RedisTask>,
 ) -> Result<()> {
-    let pending_msg = conn
-        .xread_options::<String, &str, StreamReadReply>(streams, &["0"], opts)
-        .await?;
+    let pending_msg = conn.xread_options::<String, &str, StreamReadReply>(streams, &["0"], opts).await?;
     consume_redis_message(conn, pending_msg, redis_task).await?;
 
-    let undelivered_msg = conn
-        .xread_options::<String, &str, StreamReadReply>(streams, &[">"], opts)
-        .await?;
+    let undelivered_msg = conn.xread_options::<String, &str, StreamReadReply>(streams, &[">"], opts).await?;
     consume_redis_message(conn, undelivered_msg, redis_task).await?;
 
     Ok(())
 }
 
-async fn consume_redis_message(
-    conn: &mut ConnectionManager,
-    reply: StreamReadReply,
-    redis_task: &Arc<RedisTask>,
-) -> Result<()> {
+async fn consume_redis_message(conn: &mut ConnectionManager, reply: StreamReadReply, redis_task: &Arc<RedisTask>) -> Result<()> {
     for key in reply.keys {
         if key.ids.is_empty() {
             continue;

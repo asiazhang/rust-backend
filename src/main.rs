@@ -9,13 +9,13 @@
 //!
 //! 所有代码都放在一个程序中，方便部署和维护(适用于小型系统)
 
-// 使用外部 crates 中的功能
-use consumer_service::start_job_consumers;
-use share_lib::models::config::AppConfig;
 use crate::routes::start_axum_server;
-use color_eyre::Result;
 use color_eyre::eyre::Context;
+use color_eyre::Result;
+use consumer_service::start_job_consumers;
+use cronjob_service::{start_cron_tasks, CronConfig};
 use database::initialize_database;
+use share_lib::models::config::AppConfig;
 use std::sync::Arc;
 use tokio::sync::watch::Sender;
 use tokio::{signal, try_join};
@@ -23,14 +23,6 @@ use tracing::info;
 
 mod models;
 mod routes;
-
-// 临时函数，用于兼容性
-async fn start_cron_tasks(_config: Arc<AppConfig>, _shutdown_rx: tokio::sync::watch::Receiver<bool>) -> Result<()> {
-    // 临时实现，实际应该调用 cronjob-service 中的函数
-    use std::time::Duration;
-    tokio::time::sleep(Duration::from_secs(1)).await;
-    Ok(())
-}
 
 /// 入口函数
 ///
@@ -41,17 +33,22 @@ async fn main() -> Result<()> {
     color_eyre::install()?;
 
     // 使用tracing作为日志记录器
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .init();
+    tracing_subscriber::fmt().with_max_level(tracing::Level::DEBUG).init();
 
     // 加载配置数据（从环境变量或者本地的.env文件）
     let conf = AppConfig::load()?;
 
-    let pool = initialize_database(Arc::clone(&conf)).await.context("Failed to initialize database")?;
+    let pool = initialize_database(Arc::clone(&conf))
+        .await
+        .context("Failed to initialize database")?;
 
     // 优雅退出通知机制，通过watch来通知需要感知的协程优雅退出
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+
+    // 创建 CronConfig
+    let cron_config = Arc::new(CronConfig {
+        redis_conn_str: conf.redis.redis_conn_str.clone(),
+    });
 
     // 如果有任何一个服务启动失败，那么应该会退出并打印错误信息
     _ = try_join!(
@@ -61,14 +58,13 @@ async fn main() -> Result<()> {
         // 启动redis-consumer服务
         start_job_consumers(Arc::clone(&conf), shutdown_rx.clone()),
         // 启动cron-jobs服务
-        start_cron_tasks(Arc::clone(&conf), shutdown_rx.clone()),
+        start_cron_tasks(cron_config, shutdown_rx.clone()),
     )?;
 
     info!("rust backend exit successfully");
 
     Ok(())
 }
-
 
 /// 发送退出信号
 ///
@@ -83,17 +79,12 @@ async fn main() -> Result<()> {
 /// - 多余的错误日志（计划内重启/停机）
 async fn start_shutdown_signal(shutdown_tx: Sender<bool>) -> Result<()> {
     // 监听ctrl+c信号
-    let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .context("failed to install Ctrl+C handler")
-    };
+    let ctrl_c = async { signal::ctrl_c().await.context("failed to install Ctrl+C handler") };
 
     // unix下同时监听SIGTERM信号
     #[cfg(unix)]
     let terminate = async {
-        let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
-            .context("Failed to install SIGTERM handler")?;
+        let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate()).context("Failed to install SIGTERM handler")?;
         Ok::<_, color_eyre::Report>(sigterm.recv().await)
     };
 
@@ -108,9 +99,7 @@ async fn start_shutdown_signal(shutdown_tx: Sender<bool>) -> Result<()> {
     }
 
     // 发送关闭信号，通知其他模块退出
-    shutdown_tx
-        .send(true)
-        .context("Failed to send shutdown signal")?;
+    shutdown_tx.send(true).context("Failed to send shutdown signal")?;
 
     Ok(())
 }
