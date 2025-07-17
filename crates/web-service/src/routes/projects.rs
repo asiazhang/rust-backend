@@ -4,11 +4,11 @@
 use crate::models::common::{Reply, ReplyList};
 use crate::models::err::AppError;
 use crate::models::projects::{ProjectCreate, ProjectInfo, ProjectSearch, ProjectUpdate};
-use crate::AppState;
+use crate::ConcreteAppState;
+use database::ProjectRepositoryTrait;
 use axum::extract::{Path, State};
 use axum::Json;
 use color_eyre::Result;
-use database::{ProjectRepository, ProjectRepositoryTrait};
 use std::sync::Arc;
 use tracing::debug;
 use validator::Validate;
@@ -56,7 +56,7 @@ use validator::Validate;
 )]
 #[axum::debug_handler]
 pub async fn find_projects(
-    State(state): State<Arc<AppState>>,
+    State(state): State<Arc<ConcreteAppState>>,
     Json(search): Json<ProjectSearch>,
 ) -> Result<Json<ReplyList<ProjectInfo>>, AppError> {
     debug!("🔍 搜索项目 {:#?}", search);
@@ -67,8 +67,8 @@ pub async fn find_projects(
     // saturating_sub(1)会保证结果>=0，不会出现溢出
     let offset = (search.page_query.page_index.saturating_sub(1)) * search.page_query.page_size;
 
-    // 创建项目仓库实例
-    let project_repo = ProjectRepository::new(state.db_pool.clone());
+    // 获取项目仓库实例
+    let project_repo = state.project_repository.clone();
 
     // 调用仓库方法执行搜索
     let result = project_repo
@@ -96,13 +96,13 @@ pub async fn find_projects(
 )]
 #[axum::debug_handler]
 pub async fn create_project(
-    State(state): State<Arc<AppState>>,
+    State(state): State<Arc<ConcreteAppState>>,
     Json(project): Json<ProjectCreate>,
 ) -> Result<Json<Reply<ProjectInfo>>, AppError> {
     debug!("Creating project {:#?}", project);
 
-    // 创建项目仓库实例
-    let project_repo = ProjectRepository::new(state.db_pool.clone());
+    // 获取项目仓库实例
+    let project_repo = state.project_repository.clone();
     let db_project = database::models::ProjectCreate {
         project_name: project.project_name,
         comment: project.comment,
@@ -115,10 +115,10 @@ pub async fn create_project(
 /// 查询指定项目信息
 #[utoipa::path(get, path = "/projects/{id}", tag = "projects")]
 #[axum::debug_handler]
-pub async fn get_project(State(state): State<Arc<AppState>>, Path(project_id): Path<i32>) -> Result<Json<ProjectInfo>, AppError> {
+pub async fn get_project(State(state): State<Arc<ConcreteAppState>>, Path(project_id): Path<i32>) -> Result<Json<ProjectInfo>, AppError> {
     debug!("Getting project id {:#?}", project_id);
 
-    let project_repo = ProjectRepository::new(state.db_pool.clone());
+    let project_repo = state.project_repository.clone();
     let project = project_repo.get_project_by_id(project_id).await?;
 
     Ok(Json(project.into()))
@@ -139,13 +139,13 @@ pub async fn get_project(State(state): State<Arc<AppState>>, Path(project_id): P
 #[utoipa::path(patch, path = "/projects/{id}", tag = "projects")]
 #[axum::debug_handler]
 pub async fn update_project(
-    State(state): State<Arc<AppState>>,
+    State(state): State<Arc<ConcreteAppState>>,
     Path(project_id): Path<i32>,
     Json(info): Json<ProjectUpdate>,
 ) -> Result<Json<ProjectInfo>, AppError> {
     debug!("Updating project {} with {:#?}", project_id, info);
 
-    let project_repo = ProjectRepository::new(state.db_pool.clone());
+    let project_repo = state.project_repository.clone();
     let db_update = database::models::ProjectUpdate {
         project_name: info.project_name,
         comment: info.comment,
@@ -158,10 +158,10 @@ pub async fn update_project(
 /// 删除指定的项目
 #[utoipa::path(delete, path = "/projects/{id}", tag = "projects")]
 #[axum::debug_handler]
-pub async fn delete_project(State(state): State<Arc<AppState>>, Path(project_id): Path<i32>) -> Result<Json<ProjectInfo>, AppError> {
+pub async fn delete_project(State(state): State<Arc<ConcreteAppState>>, Path(project_id): Path<i32>) -> Result<Json<ProjectInfo>, AppError> {
     debug!("delete project {:#?}", project_id);
 
-    let project_repo = ProjectRepository::new(state.db_pool.clone());
+    let project_repo = state.project_repository.clone();
     let project = project_repo.delete_project(project_id).await?;
 
     Ok(Json(project.into()))

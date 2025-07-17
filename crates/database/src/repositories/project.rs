@@ -9,6 +9,7 @@ use sqlx::PgPool;
 use tracing::debug;
 
 /// 项目仓库结构体
+#[derive(Clone)]
 pub struct ProjectRepository {
     pool: PgPool,
 }

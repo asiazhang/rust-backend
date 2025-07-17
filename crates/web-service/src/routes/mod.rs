@@ -4,7 +4,6 @@
 //!
 //! 用户可以在导出路由时传入共享数据 shared_state，这样所有路由函数都可以访问。
 
-use crate::AppState;
 use crate::routes::projects::__path_create_project;
 use crate::routes::projects::__path_delete_project;
 use crate::routes::projects::__path_find_projects;
@@ -17,6 +16,7 @@ use crate::routes::users::__path_find_users;
 use crate::routes::users::__path_get_user;
 use crate::routes::users::__path_update_user;
 use crate::routes::users::{create_user, delete_user, find_users, get_user, update_user};
+use crate::ConcreteAppState;
 use axum::Router;
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -50,13 +50,13 @@ pub mod users;
 /// .routes!(get)
 /// ```
 ///
-fn routers(state: Arc<AppState>) -> OpenApiRouter {
+fn routers(state: ConcreteAppState) -> OpenApiRouter {
     OpenApiRouter::new()
         .routes(routes!(find_projects))
         .routes(routes!(get_project, create_project, update_project, delete_project))
         .routes(routes!(find_users))
         .routes(routes!(get_user, create_user, update_user, delete_user))
-        .with_state(state)
+        .with_state(state.into())
 }
 
 /// 创建当前App的路由
@@ -68,7 +68,7 @@ fn routers(state: Arc<AppState>) -> OpenApiRouter {
 ///
 /// 由于使用了 `utoipa` 库来自动化生成`openapi`文档，因此我们没有使用原生的 [`Router`]，而是使用了
 /// [`OpenApiRouter`] 。
-pub fn create_app_router(shared_state: Arc<AppState>) -> Router {
+pub fn create_app_router(shared_state: ConcreteAppState) -> Router {
     // 当前项目的OpenAPI声明
     #[derive(OpenApi)]
     #[openapi(
