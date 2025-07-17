@@ -1,3 +1,7 @@
+pub mod routes;
+pub mod handlers;
+pub mod middleware;
+
 use axum::{
     response::Json,
     routing::get,
@@ -6,27 +10,28 @@ use axum::{
 use serde_json::{json, Value};
 use tracing::{info, instrument};
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // 初始化日志
-    tracing_subscriber::fmt::init();
-    
+/// 创建Web服务应用
+pub fn create_app() -> Router {
+    Router::new()
+        .route("/", get(root))
+        .route("/health", get(health_check))
+        .route("/api/v1/users", get(handlers::users::list_users))
+        .route("/api/v1/projects", get(handlers::projects::list_projects))
+}
+
+/// 启动Web服务
+pub async fn start_server(port: u16) -> anyhow::Result<()> {
     info!("🚀 启动 Web Service...");
     
-    // 构建应用路由
-    let app = Router::new()
-        .route("/", get(root))
-        .route("/health", get(health_check));
+    let app = create_app();
     
-    // 监听端口
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
         .expect("Failed to bind to address");
     
-    info!("📡 Web Service 正在监听 http://0.0.0.0:3000");
+    info!("📡 Web Service 正在监听 http://0.0.0.0:{}", port);
     
     axum::serve(listener, app).await?;
-    
     Ok(())
 }
 

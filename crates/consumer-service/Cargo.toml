@@ -6,6 +6,10 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lib]
+name = "consumer_service"
+path = "src/lib.rs"
+
 [dependencies]
 # 从workspace继承的依赖
 tokio = { workspace = true }
