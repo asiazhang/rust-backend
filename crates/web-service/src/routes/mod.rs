@@ -55,7 +55,7 @@ fn routers(state: ConcreteAppState) -> OpenApiRouter {
         .routes(routes!(get_project, create_project, update_project, delete_project))
         .routes(routes!(find_users))
         .routes(routes!(get_user, create_user, update_user, delete_user))
-        .with_state(state.into())
+        .with_state(state)
 }
 
 /// 创建当前App的路由

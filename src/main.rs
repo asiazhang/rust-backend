@@ -9,7 +9,6 @@
 //!
 //! 所有代码都放在一个程序中，方便部署和维护(适用于小型系统)
 
-use web_service::start_web_service;
 use color_eyre::eyre::Context;
 use color_eyre::Result;
 use consumer_service::start_job_consumers;
@@ -20,7 +19,7 @@ use std::sync::Arc;
 use tokio::sync::watch::Sender;
 use tokio::{signal, try_join};
 use tracing::info;
-
+use web_service::start_web_service;
 
 /// 入口函数
 ///

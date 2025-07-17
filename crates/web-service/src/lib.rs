@@ -13,6 +13,7 @@ pub mod models;
 pub mod routes;
 
 /// 应用共享状态
+#[derive(Debug, Clone)]
 pub struct AppState<PR: ProjectRepositoryTrait> {
     pub project_repository: Arc<PR>,
 }

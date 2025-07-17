@@ -1,5 +1,5 @@
 //! 项目仓库
-//! 
+//!
 //! 负责项目相关的数据库操作
 
 use crate::models::project::{ProjectCreate, ProjectInfo, ProjectSearchResult, ProjectUpdate};
@@ -24,35 +24,33 @@ impl ProjectRepository {
 #[async_trait::async_trait]
 impl ProjectRepositoryTrait for ProjectRepository {
     /// 根据查询参数搜索项目
-    /// 
+    ///
     /// 根据查询参数搜索符合要求的项目列表，支持分页。
-    /// 
+    ///
     /// # 参数
     /// - `project_name`: 项目名称（模糊搜索）
     /// - `page_size`: 页面大小
     /// - `offset`: 偏移量
-    /// 
+    ///
     /// # 返回值
     /// 返回包含项目列表和总数的结果 [`ProjectSearchResult`]
-    /// 
+    ///
     /// # SQL 查询说明
-    /// 
+    ///
     /// 使用 CTE（Common Table Expression）来优化查询性能：
     /// 1. 首先在 `filtered_projects` 中进行过滤和计数
     /// 2. 使用 `COUNT(*) OVER ()` 窗口函数获取总记录数
     /// 3. 使用 `COALESCE` 函数处理可选的搜索参数
     /// 4. 支持项目名称的模糊搜索（LIKE 操作）
-    /// 
+    ///
     /// # 错误处理
-    /// 
+    ///
     /// 如果数据库操作失败，会返回 [`DatabaseError`]
-    async fn find_projects(
-        &self,
-        project_name: Option<String>,
-        page_size: i64,
-        offset: i64,
-    ) -> DatabaseResult<ProjectSearchResult> {
-        debug!("🔍 搜索项目 - 名称: {:?}, 页面大小: {}, 偏移量: {}", project_name, page_size, offset);
+    async fn find_projects(&self, project_name: Option<String>, page_size: i64, offset: i64) -> DatabaseResult<ProjectSearchResult> {
+        debug!(
+            "🔍 搜索项目 - 名称: {:?}, 页面大小: {}, 偏移量: {}",
+            project_name, page_size, offset
+        );
 
         // 准备搜索参数
         // 这里name需要clone一次，因为后面会使用两次name，导致重复消费
@@ -108,12 +106,12 @@ impl ProjectRepositoryTrait for ProjectRepository {
     }
 
     /// 创建新项目
-    /// 
+    ///
     /// 根据用户输入参数创建项目信息
-    /// 
+    ///
     /// # 参数
     /// - `project`: 项目创建信息
-    /// 
+    ///
     /// # 返回值
     /// 返回创建的项目信息
     async fn create_project(&self, project: ProjectCreate) -> DatabaseResult<ProjectInfo> {
@@ -137,12 +135,12 @@ impl ProjectRepositoryTrait for ProjectRepository {
     }
 
     /// 根据 ID 获取项目信息
-    /// 
+    ///
     /// 查询指定项目信息
-    /// 
+    ///
     /// # 参数
     /// - `id`: 项目 ID
-    /// 
+    ///
     /// # 返回值
     /// 返回项目信息
     async fn get_project_by_id(&self, id: i32) -> DatabaseResult<ProjectInfo> {
@@ -166,22 +164,22 @@ impl ProjectRepositoryTrait for ProjectRepository {
     }
 
     /// 更新项目信息
-    /// 
+    ///
     /// 根据用户指定的 `id` 和 修改信息 [`ProjectUpdate`] 来更新项目信息。
-    /// 
+    ///
     /// ## SQL
-    /// 
+    ///
     /// 由于更新数据中的字段大部分都是[`Option`]，因此我们使用了`postgresql`中的`coalesce`函数，如果用户输入的值
     /// 为None，那么会被转换为数据库的null，最终被转换为之前值。
-    /// 
+    ///
     /// 两个好处：
     /// - 防止前端输入了空数据，导致数据被误清除
     /// - 不用`if`拼接的方式，代码可维护性更好
-    /// 
+    ///
     /// # 参数
     /// - `id`: 项目 ID
     /// - `update`: 更新信息
-    /// 
+    ///
     /// # 返回值
     /// 返回更新后的项目信息
     async fn update_project(&self, id: i32, update: ProjectUpdate) -> DatabaseResult<ProjectInfo> {
@@ -209,12 +207,12 @@ impl ProjectRepositoryTrait for ProjectRepository {
     }
 
     /// 删除项目
-    /// 
+    ///
     /// 删除指定的项目
-    /// 
+    ///
     /// # 参数
     /// - `id`: 项目 ID
-    /// 
+    ///
     /// # 返回值
     /// 返回被删除的项目信息
     async fn delete_project(&self, id: i32) -> DatabaseResult<ProjectInfo> {
