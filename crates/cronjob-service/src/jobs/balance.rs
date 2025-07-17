@@ -21,10 +21,10 @@ use chrono::Utc;
 use redis::aio::ConnectionManager;
 use redis::{AsyncCommands, RedisResult, Value};
 use redis::{ExistenceCheck, SetExpiry, SetOptions};
-use share_lib::models::redis_constants::{
+use shared_lib::models::redis_constants::{
     BATCH_SIZE, CONSUMER_GROUP_NAME, CONSUMER_HEARTBEAT_KEY, HEARTBEAT_TIMEOUT_SECONDS, LOCK_TTL_SECONDS, REBALANCE_LOCK_KEY,
 };
-use share_lib::models::redis_task::RedisConsumerHeartBeat;
+use shared_lib::models::redis_task::RedisConsumerHeartBeat;
 use std::collections::HashMap;
 use tracing::{debug, error, info, warn};
 

@@ -1,5 +1,5 @@
 use crate::{DatabaseError, DatabaseResult};
-use share_lib::models::config::AppConfig;
+use shared_lib::models::config::AppConfig;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres};
 use std::sync::Arc;

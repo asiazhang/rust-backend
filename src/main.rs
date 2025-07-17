@@ -15,7 +15,7 @@ use color_eyre::Result;
 use consumer_service::start_job_consumers;
 use cronjob_service::{start_cron_tasks, CronConfig};
 use database::initialize_database;
-use share_lib::models::config::AppConfig;
+use shared_lib::models::config::AppConfig;
 use std::sync::Arc;
 use tokio::sync::watch::Sender;
 use tokio::{signal, try_join};

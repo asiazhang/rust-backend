@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 # 内部依赖
-share_lib = { path = "../share_lib" }
+shared-lib = { path = "../shared-lib" }
 
 # 外部依赖
 sqlx = { workspace = true }

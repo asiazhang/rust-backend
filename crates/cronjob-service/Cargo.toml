@@ -23,5 +23,5 @@ color-eyre = { workspace = true }
 # Cronjob服务特有的依赖
 tokio-cron-scheduler = "0.14.0"
 
-# 添加 share_lib 依赖
-share_lib = { path = "../share_lib" }
+# 添加 shared-lib 依赖
+shared-lib = { path = "../shared-lib" }

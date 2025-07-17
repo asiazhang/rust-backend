@@ -321,7 +321,7 @@ dependencies = [
  "redis",
  "serde",
  "serde_json",
- "share_lib",
+ "shared-lib",
  "thiserror",
  "time",
  "tokio",
@@ -377,7 +377,7 @@ dependencies = [
  "color-eyre",
  "redis",
  "serde_json",
- "share_lib",
+ "shared-lib",
  "tokio",
  "tokio-cron-scheduler",
  "tracing",
@@ -447,7 +447,7 @@ dependencies = [
 name = "database"
 version = "0.1.0"
 dependencies = [
- "share_lib",
+ "shared-lib",
  "sqlx",
  "thiserror",
  "tokio",
@@ -1550,7 +1550,7 @@ dependencies = [
  "redis",
  "serde",
  "serde_json",
- "share_lib",
+ "shared-lib",
  "sqlx",
  "thiserror",
  "tokio",
@@ -1692,7 +1692,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "share_lib"
+name = "shared-lib"
 version = "0.1.0"
 dependencies = [
  "anyhow",

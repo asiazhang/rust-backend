@@ -1,5 +1,5 @@
 [package]
-name = "share_lib"
+name = "shared-lib"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 # 内部依赖
-share_lib = { path = "crates/share_lib" }
+shared-lib = { path = "crates/shared-lib" }
 consumer-service = { path = "crates/consumer-service" }
 cronjob-service = { path = "crates/cronjob-service" }
 database = { path = "crates/database" }
@@ -36,7 +36,7 @@ members = [
     "crates/web-service",
     "crates/consumer-service",
     "crates/cronjob-service",
-    "crates/share_lib",
+    "crates/shared-lib",
     "crates/database"
 ]
 resolver = "2"

@@ -28,4 +28,4 @@ validator = { workspace = true }
 dotenvy = { workspace = true }
 
 # 内部依赖
-share_lib = { path = "../share_lib" }
+shared-lib = { path = "../shared-lib" }
