@@ -381,6 +381,7 @@ dependencies = [
  "redis",
  "serde",
  "serde_json",
+ "share_lib",
  "sqlx",
  "thiserror",
  "time",

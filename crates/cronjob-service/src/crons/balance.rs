@@ -22,16 +22,16 @@ use std::collections::HashMap;
 use tracing::{info, warn, error, debug};
 use chrono::Utc;
 use anyhow::Result;
-use crate::models::redis_task::RedisConsumerHeartBeat;
-use crate::models::redis_constants::{
-    CONSUMER_HEARTBEAT_KEY, CONSUMER_GROUP_NAME, HEARTBEAT_TIMEOUT_SECONDS, 
+use share_lib::models::redis_task::RedisConsumerHeartBeat;
+use share_lib::models::redis_constants::{
+    CONSUMER_HEARTBEAT_KEY, CONSUMER_GROUP_NAME, HEARTBEAT_TIMEOUT_SECONDS,
     REBALANCE_LOCK_KEY, LOCK_TTL_SECONDS, BATCH_SIZE
 };
 use redis::{SetOptions, SetExpiry, ExistenceCheck};
 
 /// 扩展的消费者状态信息，包含分组信息
 #[derive(Debug, Clone)]
-pub(crate) struct ConsumerStatus {
+pub struct ConsumerStatus {
     /// 心跳数据
     heartbeat: RedisConsumerHeartBeat,
     /// 消费者所属分组（从Redis stream消费者组信息中获取）
@@ -445,3 +445,4 @@ mod tests {
         let _: () = conn.del(CONSUMER_HEARTBEAT_KEY).await.unwrap();
     }
 }
+
