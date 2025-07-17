@@ -15,10 +15,8 @@ use share_lib::models::config::AppConfig;
 use crate::routes::start_axum_server;
 use color_eyre::Result;
 use color_eyre::eyre::Context;
-use sqlx::postgres::PgPoolOptions;
+use database::initialize_database;
 use std::sync::Arc;
-use std::time::Duration;
-use sqlx::{Pool, Postgres};
 use tokio::sync::watch::Sender;
 use tokio::{signal, try_join};
 use tracing::info;
@@ -29,6 +27,7 @@ mod routes;
 // 临时函数，用于兼容性
 async fn start_cron_tasks(_config: Arc<AppConfig>, _shutdown_rx: tokio::sync::watch::Receiver<bool>) -> Result<()> {
     // 临时实现，实际应该调用 cronjob-service 中的函数
+    use std::time::Duration;
     tokio::time::sleep(Duration::from_secs(1)).await;
     Ok(())
 }
@@ -49,7 +48,7 @@ async fn main() -> Result<()> {
     // 加载配置数据（从环境变量或者本地的.env文件）
     let conf = AppConfig::load()?;
 
-    let pool = database_migrate(Arc::clone(&conf)).await?;
+    let pool = initialize_database(Arc::clone(&conf)).await.context("Failed to initialize database")?;
 
     // 优雅退出通知机制，通过watch来通知需要感知的协程优雅退出
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
@@ -70,30 +69,6 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn database_migrate(conf: Arc<AppConfig>) -> Result<Pool<Postgres>> {
-    // 创建postgres数据库连接池
-    // 使用默认配置，如果有调整需要可参考sqlx文档
-    // 注意：pool已经是一个智能指针了，所以可以使用.clone()安全跨线程使用
-    let pool = PgPoolOptions::new()
-        // 启动预留，加快获取速度
-        .min_connections(10)
-        // 生产环境配置30~40即可
-        .max_connections(40)
-        .acquire_timeout(Duration::from_secs(3))
-        // 1小时空闲则释放
-        .idle_timeout(Duration::from_secs(3600))
-        // 6小时强制释放，避免长时间链接导致数据库问题
-        .max_lifetime(Duration::from_secs(3600 * 6))
-        .test_before_acquire(true)
-        .connect(&conf.postgresql_conn_str)
-        .await
-        .context("Connect to postgresql database")?;
-
-    info!("Starting migrating database...");
-    sqlx::migrate!().run(&pool).await?;
-    
-    Ok(pool)
-}
 
 /// 发送退出信号
 ///
