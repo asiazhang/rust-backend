@@ -2,7 +2,8 @@
 members = [
     "crates/web-service",
     "crates/consumer-service", 
-    "crates/cronjob-service"
+    "crates/cronjob-service",
+    "crates/share_lib"
 ]
 resolver = "2"
 

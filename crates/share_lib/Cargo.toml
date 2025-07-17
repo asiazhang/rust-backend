@@ -1,0 +1,27 @@
+[package]
+name = "share_lib"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# 基础依赖
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+validator = { workspace = true }
+
+# 数据库和缓存
+sqlx = { workspace = true }
+redis = { workspace = true }
+
+# 其他工具
+rand = { workspace = true }
