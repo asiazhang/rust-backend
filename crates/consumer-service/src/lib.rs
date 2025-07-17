@@ -13,7 +13,7 @@ use color_eyre::Result;
 use futures::future::try_join_all;
 use crate::redis_interaction::{create_task_group, consumer_task_worker_with_heartbeat};
 use shared_lib::models::config::AppConfig;
-use shared_lib::models::redis_task::{RedisTask, RedisTaskCreator};
+use shared_lib::models::redis_task::{RedisTask, RedisTaskCreator, RedisHandler};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch::Receiver;
@@ -76,9 +76,9 @@ pub async fn start_job_consumers(app_config: Arc<AppConfig>, shutdown_rx: Receiv
     Ok(())
 }
 
-async fn guard_start_create_task_consumers(
+async fn guard_start_create_task_consumers<T: RedisHandler>(
     app_config: Arc<AppConfig>,
-    redis_task: Arc<RedisTask>,
+    redis_task: Arc<RedisTask<T>>,
     shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
     loop {
@@ -96,7 +96,7 @@ async fn guard_start_create_task_consumers(
     Ok(())
 }
 
-async fn start_create_task_consumers(app_config: Arc<AppConfig>, redis_task: Arc<RedisTask>, shutdown_rx: Receiver<bool>) -> Result<()> {
+async fn start_create_task_consumers<T: RedisHandler>(app_config: Arc<AppConfig>, redis_task: Arc<RedisTask<T>>, shutdown_rx: Receiver<bool>) -> Result<()> {
     create_task_group(app_config.redis.redis_conn_str.clone(), &redis_task).await?;
 
     let consumers: Vec<_> = (0..app_config.redis.max_consumer_count)

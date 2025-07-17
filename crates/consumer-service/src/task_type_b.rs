@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use color_eyre::Result;
 use shared_lib::models::redis_task::{RedisHandler, RedisTask, RedisTaskCreator};
 use shared_lib::models::tasks::TaskInfo;
@@ -8,7 +7,6 @@ use tracing::debug;
 
 pub struct TaskTypeBCreator;
 
-#[async_trait]
 impl RedisHandler for TaskTypeBCreator {
     async fn handle_task(&self, raw: String) -> Result<()> {
         let task_info = serde_json::from_str::<TaskInfo>(&raw)?;
@@ -21,8 +19,8 @@ impl RedisHandler for TaskTypeBCreator {
     }
 }
 
-impl RedisTaskCreator for TaskTypeBCreator {
-    fn new_redis_task() -> Arc<RedisTask> {
+impl RedisTaskCreator<TaskTypeBCreator> for TaskTypeBCreator {
+    fn new_redis_task() -> Arc<RedisTask<TaskTypeBCreator>> {
         Arc::new(RedisTask {
             stream_name: "task_type_b".to_string(),
             consumer_name_template: "task_consumer".to_string(),

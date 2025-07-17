@@ -6,7 +6,7 @@ use redis::aio::ConnectionManager;
 use redis::streams::{StreamId, StreamReadOptions, StreamReadReply};
 use redis::{AsyncCommands, RedisError, RedisResult, Value};
 use shared_lib::models::redis_constants::{CONSUMER_GROUP_NAME, CONSUMER_HEARTBEAT_KEY, HEARTBEAT_INTERVAL_SECONDS};
-use shared_lib::models::redis_task::{RedisConsumerHeartBeat, RedisTask};
+use shared_lib::models::redis_task::{RedisConsumerHeartBeat, RedisTask, RedisHandler};
 use std::sync::Arc;
 use std::time::Duration;
 use time::OffsetDateTime;
@@ -18,7 +18,7 @@ pub async fn new_redis_connection_manager(conn_str: &str) -> Result<ConnectionMa
     Ok(ConnectionManager::new(redis::Client::open(conn_str)?).await?)
 }
 
-pub async fn create_task_group(conn_str: String, redis_task: &RedisTask) -> Result<()> {
+pub async fn create_task_group<T: RedisHandler>(conn_str: String, redis_task: &RedisTask<T>) -> Result<()> {
     let conn = new_redis_connection_manager(&conn_str).await?;
 
     let re: RedisResult<()> = conn
@@ -32,9 +32,9 @@ pub async fn create_task_group(conn_str: String, redis_task: &RedisTask) -> Resu
     Ok(())
 }
 
-pub async fn consumer_task_worker_with_heartbeat(
+pub async fn consumer_task_worker_with_heartbeat<T: RedisHandler>(
     conn_str: String,
-    redis_task: Arc<RedisTask>,
+    redis_task: Arc<RedisTask<T>>,
     consumer_name: String,
     shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
@@ -48,11 +48,11 @@ pub async fn consumer_task_worker_with_heartbeat(
     Ok(())
 }
 
-pub async fn xread_group(
+pub async fn xread_group<T: RedisHandler>(
     conn: &mut ConnectionManager,
     streams: &[String],
     opts: &StreamReadOptions,
-    redis_task: &Arc<RedisTask>,
+    redis_task: &Arc<RedisTask<T>>,
 ) -> Result<()> {
     let pending_msg = conn.xread_options::<String, &str, StreamReadReply>(streams, &["0"], opts).await?;
     consume_redis_message(conn, pending_msg, redis_task).await?;
@@ -63,7 +63,7 @@ pub async fn xread_group(
     Ok(())
 }
 
-pub async fn consume_redis_message(conn: &mut ConnectionManager, reply: StreamReadReply, redis_task: &Arc<RedisTask>) -> Result<()> {
+pub async fn consume_redis_message<T: RedisHandler>(conn: &mut ConnectionManager, reply: StreamReadReply, redis_task: &Arc<RedisTask<T>>) -> Result<()> {
     for key in reply.keys {
         if key.ids.is_empty() {
             continue;
@@ -96,7 +96,7 @@ pub async fn consume_redis_message(conn: &mut ConnectionManager, reply: StreamRe
     Ok(())
 }
 
-async fn consume_single_redis_message(redis_task: Arc<RedisTask>, stream_id: &StreamId) {
+async fn consume_single_redis_message<T: RedisHandler>(redis_task: Arc<RedisTask<T>>, stream_id: &StreamId) {
     if let Some(Value::BulkString(data)) = stream_id.map.get("message") {
         if let Ok(raw) = String::from_utf8(data.to_vec()) {
             if let Err(err) = redis_task.handler.handle_task(raw).await {
@@ -110,9 +110,9 @@ async fn consume_single_redis_message(redis_task: Arc<RedisTask>, stream_id: &St
     }
 }
 
-async fn consumer_task_worker(
+async fn consumer_task_worker<T: RedisHandler>(
     mut conn: ConnectionManager,
-    redis_task: Arc<RedisTask>,
+    redis_task: Arc<RedisTask<T>>,
     consumer_name: String,
     shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
@@ -154,9 +154,9 @@ async fn consumer_task_worker(
     Ok(())
 }
 
-async fn consumer_task_send_heartbeat(
+async fn consumer_task_send_heartbeat<T: RedisHandler>(
     mut conn: ConnectionManager,
-    redis_task: Arc<RedisTask>,
+    redis_task: Arc<RedisTask<T>>,
     consumer_name: String,
     mut shutdown_rx: Receiver<bool>,
 ) -> Result<()> {

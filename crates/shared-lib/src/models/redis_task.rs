@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use color_eyre::Result;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -10,7 +9,7 @@ use std::sync::Arc;
 /// - `stream_name`: 流名称不同，用于区分不同的消息业务类型
 /// - `consumer_name`: 消费者名称不同，方便定位识别，实际执行的时候会加上序号（并发处理的多个消费者）
 /// - `handler`: 核心业务处理器
-pub struct RedisTask {
+pub struct RedisTask<T: RedisHandler> {
     /// Redis流名称
     pub stream_name: String,
 
@@ -19,8 +18,8 @@ pub struct RedisTask {
 
     /// Redis消息处理器
     ///
-    /// 这是一个动态的处理器，需要符合 [`RedisHandler`] 特征
-    pub handler: Arc<dyn RedisHandler>,
+    /// 这是一个强类型的处理器，需要实现 [`RedisHandler`] 特征
+    pub handler: Arc<T>,
 }
 
 /// Redis消费者心跳信息
@@ -36,7 +35,7 @@ pub struct RedisConsumerHeartBeat {
     pub last_heartbeat: i64,
 }
 
-impl Debug for RedisTask {
+impl<T: RedisHandler> Debug for RedisTask<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RedisTask")
             .field("stream_name", &self.stream_name)
@@ -48,11 +47,12 @@ impl Debug for RedisTask {
 /// 异步Redis处理器特征
 ///
 /// 由于[`RedisHandler`]需要async move到协程中，因此需要实现线程安全的[`Send`]和[`Sync`]
-#[async_trait]
+/// 在个人项目中，我们可以直接使用 async fn，简洁明了！🎉
+#[allow(async_fn_in_trait)]
 pub trait RedisHandler: Send + Sync {
     async fn handle_task(&self, task: String) -> Result<()>;
 }
 
-pub trait RedisTaskCreator: Send + Sync {
-    fn new_redis_task() -> Arc<RedisTask>;
+pub trait RedisTaskCreator<T: RedisHandler>: Send + Sync {
+    fn new_redis_task() -> Arc<RedisTask<T>>;
 }
