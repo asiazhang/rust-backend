@@ -2,19 +2,19 @@
 //!
 //! 这个模块提供了消息队列消费的基础功能。
 
+pub mod redis_interaction;
 pub mod task_type_a;
 pub mod task_type_b;
-pub mod redis_interaction;
 pub mod traits;
 
 use self::task_type_a::TaskTypeACreator;
 use self::task_type_b::TaskTypeBCreator;
-use color_eyre::eyre::Context;
+use crate::redis_interaction::{consumer_task_worker_with_heartbeat, create_task_group};
+use crate::traits::RedisHandlerTrait;
 use color_eyre::Result;
+use color_eyre::eyre::Context;
 use futures::future::try_join_all;
-use crate::redis_interaction::{create_task_group, consumer_task_worker_with_heartbeat};
 use shared_lib::models::config::AppConfig;
-use crate::traits::{RedisHandler, RedisTask, RedisTaskCreator};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch::Receiver;
@@ -29,20 +29,20 @@ use tracing::{info, warn};
 ///
 /// ## 通用处理
 ///
-/// 代码中的[`start_create_task_consumers`]是一个通用redis处理器，封装了相关逻辑，用户仅需要创建一个
-/// [`RedisTask`]类型的结构体，传递给通用处理器即可。
+/// 代码中的[`guard_start_create_task_consumers`]是一个通用redis处理器，封装了相关逻辑，用户仅需要创建一个
+/// 实现了[`RedisHandlerTrait`]特征的处理器，传递给通用处理器即可。
 ///
-/// 主要核心处理函数在handler，这是一个实现了[`crate::models::redis_task::RedisHandler`] 特征的处理器。
+/// 主要核心处理函数在handler，这是一个实现了[`crate::traits::RedisHandlerTrait`] 特征的处理器。
 ///
 /// 用户一般这样使用：
 ///
 /// ```rust
-/// let info1 = RedisTask {handler: Arc::new(Task1), ...}
-/// let info2 = RedisTask {handler: Arc::new(Task2), ...}
+/// let task1 = Arc::new(TaskTypeACreator {});
+/// let task2 = Arc::new(TaskTypeBCreator {});
 ///
 /// try_join!(
-///     start_create_task_consumers(app_config, info1),
-///     start_create_task_consumers(app_config, info2),
+///     guard_start_create_task_consumers(app_config.clone(), task1, shutdown_rx.clone()),
+///     guard_start_create_task_consumers(app_config.clone(), task2, shutdown_rx.clone()),
 /// )?;
 /// ```
 ///
@@ -68,8 +68,8 @@ pub async fn start_job_consumers(app_config: Arc<AppConfig>, shutdown_rx: Receiv
     );
 
     try_join!(
-        guard_start_create_task_consumers(Arc::clone(&app_config), TaskTypeACreator::new_redis_task(), shutdown_rx.clone()),
-        guard_start_create_task_consumers(Arc::clone(&app_config), TaskTypeBCreator::new_redis_task(), shutdown_rx.clone())
+        guard_start_create_task_consumers(Arc::clone(&app_config), Arc::new(TaskTypeACreator {}), shutdown_rx.clone()),
+        guard_start_create_task_consumers(Arc::clone(&app_config), Arc::new(TaskTypeBCreator {}), shutdown_rx.clone())
     )?;
 
     info!("Redis job consumers stopped");
@@ -77,9 +77,9 @@ pub async fn start_job_consumers(app_config: Arc<AppConfig>, shutdown_rx: Receiv
     Ok(())
 }
 
-async fn guard_start_create_task_consumers<T: RedisHandler>(
+async fn guard_start_create_task_consumers<T: RedisHandlerTrait>(
     app_config: Arc<AppConfig>,
-    redis_task: Arc<RedisTask<T>>,
+    redis_task: Arc<T>,
     shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
     loop {
@@ -97,12 +97,16 @@ async fn guard_start_create_task_consumers<T: RedisHandler>(
     Ok(())
 }
 
-async fn start_create_task_consumers<T: RedisHandler>(app_config: Arc<AppConfig>, redis_task: Arc<RedisTask<T>>, shutdown_rx: Receiver<bool>) -> Result<()> {
+async fn start_create_task_consumers<T: RedisHandlerTrait>(
+    app_config: Arc<AppConfig>,
+    redis_task: Arc<T>,
+    shutdown_rx: Receiver<bool>,
+) -> Result<()> {
     create_task_group(app_config.redis.redis_conn_str.clone(), &redis_task).await?;
 
     let consumers: Vec<_> = (0..app_config.redis.max_consumer_count)
         .map(|i| {
-            let consumer_name = format!("{}_{}", redis_task.consumer_name_template, i);
+            let consumer_name = format!("{}_{}", redis_task.consumer_name_template(), i);
 
             consumer_task_worker_with_heartbeat(
                 app_config.redis.redis_conn_str.clone(),
@@ -115,8 +119,7 @@ async fn start_create_task_consumers<T: RedisHandler>(app_config: Arc<AppConfig>
 
     try_join_all(consumers)
         .await
-        .context(format!("wait for all consumer [{}] end", redis_task.consumer_name_template))?;
+        .context(format!("wait for all consumer [{}] end", redis_task.consumer_name_template()))?;
 
     Ok(())
 }
-

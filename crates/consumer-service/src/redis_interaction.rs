@@ -1,13 +1,13 @@
-use color_eyre::eyre::Context;
+use crate::traits::RedisHandlerTrait;
 use color_eyre::Result;
-use futures::stream::iter;
+use color_eyre::eyre::Context;
 use futures::StreamExt;
+use futures::stream::iter;
 use redis::aio::ConnectionManager;
 use redis::streams::{StreamId, StreamReadOptions, StreamReadReply};
 use redis::{AsyncCommands, RedisError, RedisResult, Value};
 use shared_lib::models::redis_constants::{CONSUMER_GROUP_NAME, CONSUMER_HEARTBEAT_KEY, HEARTBEAT_INTERVAL_SECONDS};
 use shared_lib::models::redis_task::RedisConsumerHeartBeat;
-use crate::traits::{RedisHandler, RedisTask};
 use std::sync::Arc;
 use std::time::Duration;
 use time::OffsetDateTime;
@@ -19,12 +19,12 @@ pub async fn new_redis_connection_manager(conn_str: &str) -> Result<ConnectionMa
     Ok(ConnectionManager::new(redis::Client::open(conn_str)?).await?)
 }
 
-pub async fn create_task_group<T: RedisHandler>(conn_str: String, redis_task: &RedisTask<T>) -> Result<()> {
+pub async fn create_task_group<T: RedisHandlerTrait>(conn_str: String, redis_task: &Arc<T>) -> Result<()> {
     let conn = new_redis_connection_manager(&conn_str).await?;
 
     let re: RedisResult<()> = conn
         .clone()
-        .xgroup_create_mkstream(&redis_task.stream_name, CONSUMER_GROUP_NAME, "$")
+        .xgroup_create_mkstream(redis_task.stream_name(), CONSUMER_GROUP_NAME, "$")
         .await;
     if let Err(err) = re {
         warn!("Failed to create redis task group {}: {}", CONSUMER_GROUP_NAME, err);
@@ -33,9 +33,9 @@ pub async fn create_task_group<T: RedisHandler>(conn_str: String, redis_task: &R
     Ok(())
 }
 
-pub async fn consumer_task_worker_with_heartbeat<T: RedisHandler>(
+pub async fn consumer_task_worker_with_heartbeat<T: RedisHandlerTrait>(
     conn_str: String,
-    redis_task: Arc<RedisTask<T>>,
+    redis_task: Arc<T>,
     consumer_name: String,
     shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
@@ -49,11 +49,11 @@ pub async fn consumer_task_worker_with_heartbeat<T: RedisHandler>(
     Ok(())
 }
 
-pub async fn xread_group<T: RedisHandler>(
+pub async fn xread_group<T: RedisHandlerTrait>(
     conn: &mut ConnectionManager,
     streams: &[String],
     opts: &StreamReadOptions,
-    redis_task: &Arc<RedisTask<T>>,
+    redis_task: &Arc<T>,
 ) -> Result<()> {
     let pending_msg = conn.xread_options::<String, &str, StreamReadReply>(streams, &["0"], opts).await?;
     consume_redis_message(conn, pending_msg, redis_task).await?;
@@ -64,7 +64,11 @@ pub async fn xread_group<T: RedisHandler>(
     Ok(())
 }
 
-pub async fn consume_redis_message<T: RedisHandler>(conn: &mut ConnectionManager, reply: StreamReadReply, redis_task: &Arc<RedisTask<T>>) -> Result<()> {
+pub async fn consume_redis_message<T: RedisHandlerTrait>(
+    conn: &mut ConnectionManager,
+    reply: StreamReadReply,
+    redis_task: &Arc<T>,
+) -> Result<()> {
     for key in reply.keys {
         if key.ids.is_empty() {
             continue;
@@ -80,7 +84,7 @@ pub async fn consume_redis_message<T: RedisHandler>(conn: &mut ConnectionManager
 
         let xack_ret: Result<(), RedisError> = conn
             .xack(
-                &redis_task.stream_name,
+                redis_task.stream_name(),
                 CONSUMER_GROUP_NAME,
                 &key.ids.iter().map(|it| &it.id).collect::<Vec<_>>(),
             )
@@ -89,7 +93,8 @@ pub async fn consume_redis_message<T: RedisHandler>(conn: &mut ConnectionManager
         if let Err(err) = xack_ret {
             error!(
                 "xack batch consumer redis message from stream {} failed, err = {}",
-                &redis_task.stream_name, err
+                &redis_task.stream_name(),
+                err
             )
         }
     }
@@ -97,10 +102,10 @@ pub async fn consume_redis_message<T: RedisHandler>(conn: &mut ConnectionManager
     Ok(())
 }
 
-async fn consume_single_redis_message<T: RedisHandler>(redis_task: Arc<RedisTask<T>>, stream_id: &StreamId) {
+async fn consume_single_redis_message<T: RedisHandlerTrait>(redis_task: Arc<T>, stream_id: &StreamId) {
     if let Some(Value::BulkString(data)) = stream_id.map.get("message") {
         if let Ok(raw) = String::from_utf8(data.to_vec()) {
-            if let Err(err) = redis_task.handler.handle_task(raw).await {
+            if let Err(err) = redis_task.handle_task(raw).await {
                 error!("failed to handle redis message: {}", err);
             }
         } else {
@@ -111,9 +116,9 @@ async fn consume_single_redis_message<T: RedisHandler>(redis_task: Arc<RedisTask
     }
 }
 
-async fn consumer_task_worker<T: RedisHandler>(
+async fn consumer_task_worker<T: RedisHandlerTrait>(
     mut conn: ConnectionManager,
-    redis_task: Arc<RedisTask<T>>,
+    redis_task: Arc<T>,
     consumer_name: String,
     shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
@@ -123,7 +128,7 @@ async fn consumer_task_worker<T: RedisHandler>(
         .group(CONSUMER_GROUP_NAME, &consumer_name)
         .block(1000)
         .count(10);
-    let streams = vec![redis_task.stream_name.clone()];
+    let streams = vec![redis_task.stream_name()];
 
     let mut shutdown_rx = shutdown_rx.clone();
 
@@ -155,9 +160,9 @@ async fn consumer_task_worker<T: RedisHandler>(
     Ok(())
 }
 
-async fn consumer_task_send_heartbeat<T: RedisHandler>(
+async fn consumer_task_send_heartbeat<T: RedisHandlerTrait>(
     mut conn: ConnectionManager,
-    redis_task: Arc<RedisTask<T>>,
+    redis_task: Arc<T>,
     consumer_name: String,
     mut shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
@@ -176,7 +181,7 @@ async fn consumer_task_send_heartbeat<T: RedisHandler>(
             }
           _ = interval.tick() => {
                 let redis_heartbeat = RedisConsumerHeartBeat {
-                    stream_name: redis_task.stream_name.clone(),
+                    stream_name: redis_task.stream_name().clone(),
                     consumer_name: consumer_name.clone(),
                     last_heartbeat: OffsetDateTime::now_utc().unix_timestamp(),
                 };
@@ -194,4 +199,3 @@ async fn consumer_task_send_heartbeat<T: RedisHandler>(
 
     Ok(())
 }
-
