@@ -37,8 +37,8 @@ use tracing::{info, warn};
 /// 用户一般这样使用：
 ///
 /// ```rust
-/// let task1 = Arc::new(TaskTypeACreator {});
-/// let task2 = Arc::new(TaskTypeBCreator {});
+/// let task1 = TaskTypeACreator::new();
+/// let task2 = TaskTypeBCreator::new();
 ///
 /// try_join!(
 ///     guard_start_create_task_consumers(app_config.clone(), task1, shutdown_rx.clone()),
@@ -68,8 +68,8 @@ pub async fn start_job_consumers(app_config: Arc<AppConfig>, shutdown_rx: Receiv
     );
 
     try_join!(
-        guard_start_create_task_consumers(Arc::clone(&app_config), Arc::new(TaskTypeACreator {}), shutdown_rx.clone()),
-        guard_start_create_task_consumers(Arc::clone(&app_config), Arc::new(TaskTypeBCreator {}), shutdown_rx.clone())
+        guard_start_create_task_consumers(Arc::clone(&app_config), TaskTypeACreator::new(), shutdown_rx.clone()),
+        guard_start_create_task_consumers(Arc::clone(&app_config), TaskTypeBCreator::new(), shutdown_rx.clone())
     )?;
 
     info!("Redis job consumers stopped");

@@ -128,7 +128,7 @@ async fn consumer_task_worker<T: RedisHandlerTrait>(
         .group(CONSUMER_GROUP_NAME, &consumer_name)
         .block(1000)
         .count(10);
-    let streams = vec![redis_task.stream_name()];
+    let streams = vec![redis_task.stream_name().to_string()];
 
     let mut shutdown_rx = shutdown_rx.clone();
 
@@ -181,7 +181,7 @@ async fn consumer_task_send_heartbeat<T: RedisHandlerTrait>(
             }
           _ = interval.tick() => {
                 let redis_heartbeat = RedisConsumerHeartBeat {
-                    stream_name: redis_task.stream_name().clone(),
+                    stream_name: redis_task.stream_name().to_string(),
                     consumer_name: consumer_name.clone(),
                     last_heartbeat: OffsetDateTime::now_utc().unix_timestamp(),
                 };

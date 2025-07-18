@@ -1,10 +1,18 @@
 use crate::traits::RedisHandlerTrait;
 use color_eyre::Result;
 use shared_lib::models::tasks::TaskInfo;
+use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, trace};
 
 pub struct TaskTypeACreator;
+
+impl TaskTypeACreator {
+    /// 创建新实例
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self)
+    }
+}
 
 impl RedisHandlerTrait for TaskTypeACreator {
     async fn handle_task(&self, raw: String) -> Result<()> {
@@ -19,11 +27,11 @@ impl RedisHandlerTrait for TaskTypeACreator {
         Ok(())
     }
 
-    fn stream_name(&self) -> String {
-        "task_type_a".to_string()
+    fn stream_name(&self) -> &'static str {
+        "task_type_a"
     }
 
-    fn consumer_name_template(&self) -> String {
-        "task_consumer".to_string()
+    fn consumer_name_template(&self) -> &'static str {
+        "task_consumer"
     }
 }

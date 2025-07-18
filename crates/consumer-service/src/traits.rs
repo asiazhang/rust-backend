@@ -12,6 +12,6 @@ use color_eyre::Result;
 #[allow(async_fn_in_trait)]
 pub trait RedisHandlerTrait: Send + Sync {
     async fn handle_task(&self, task: String) -> Result<()>;
-    fn stream_name(&self) -> String;
-    fn consumer_name_template(&self) -> String;
+    fn stream_name(&self) -> &'static str;
+    fn consumer_name_template(&self) -> &'static str;
 }
