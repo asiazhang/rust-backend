@@ -1,5 +1,5 @@
 use color_eyre::Result;
-use shared_lib::models::redis_task::{RedisHandler, RedisTask, RedisTaskCreator};
+use crate::traits::{RedisHandler, RedisTask, RedisTaskCreator};
 use shared_lib::models::tasks::TaskInfo;
 use std::sync::Arc;
 use std::time::Duration;

@@ -5,6 +5,7 @@
 pub mod task_type_a;
 pub mod task_type_b;
 pub mod redis_interaction;
+pub mod traits;
 
 use self::task_type_a::TaskTypeACreator;
 use self::task_type_b::TaskTypeBCreator;
@@ -13,7 +14,7 @@ use color_eyre::Result;
 use futures::future::try_join_all;
 use crate::redis_interaction::{create_task_group, consumer_task_worker_with_heartbeat};
 use shared_lib::models::config::AppConfig;
-use shared_lib::models::redis_task::{RedisTask, RedisTaskCreator, RedisHandler};
+use crate::traits::{RedisHandler, RedisTask, RedisTaskCreator};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::watch::Receiver;
