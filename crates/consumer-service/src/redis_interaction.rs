@@ -19,7 +19,7 @@ pub async fn new_redis_connection_manager(conn_str: &str) -> Result<ConnectionMa
     Ok(ConnectionManager::new(redis::Client::open(conn_str)?).await?)
 }
 
-pub async fn create_task_group<T: RedisHandlerTrait>(conn_str: String, redis_task: &Arc<T>) -> Result<()> {
+pub async fn create_task_group<T: RedisHandlerTrait>(conn_str: String, redis_task: Arc<T>) -> Result<()> {
     let conn = new_redis_connection_manager(&conn_str).await?;
 
     let re: RedisResult<()> = conn

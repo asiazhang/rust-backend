@@ -41,8 +41,8 @@ use tracing::{info, warn};
 /// let task2 = TaskTypeBCreator::new();
 ///
 /// try_join!(
-///     guard_start_create_task_consumers(app_config.clone(), task1, shutdown_rx.clone()),
-///     guard_start_create_task_consumers(app_config.clone(), task2, shutdown_rx.clone()),
+///     guard_start_create_task_consumers(Arc::clone(&app_config), task1, shutdown_rx.clone()),
+///     guard_start_create_task_consumers(Arc::clone(&app_config), task2, shutdown_rx.clone()),
 /// )?;
 /// ```
 ///
@@ -102,7 +102,7 @@ async fn start_create_task_consumers<T: RedisHandlerTrait>(
     redis_task: Arc<T>,
     shutdown_rx: Receiver<bool>,
 ) -> Result<()> {
-    create_task_group(app_config.redis.redis_conn_str.clone(), &redis_task).await?;
+    create_task_group(app_config.redis.redis_conn_str.clone(), Arc::clone(&redis_task)).await?;
 
     let consumers: Vec<_> = (0..app_config.redis.max_consumer_count)
         .map(|i| {
