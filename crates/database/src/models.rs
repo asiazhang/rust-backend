@@ -4,5 +4,5 @@
 
 pub mod project;
 
-// 重新导出所有模型
-pub use project::*;
+// 重新导出具体的模型
+pub use project::{ProjectCreate, ProjectInfo, ProjectSearchResult, ProjectUpdate};

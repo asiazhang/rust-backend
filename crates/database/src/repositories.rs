@@ -5,6 +5,6 @@
 pub mod project;
 pub mod traits;
 
-// 重新导出所有仓库
-pub use project::*;
-pub use traits::*;
+// 重新导出具体的类型
+pub use project::ProjectRepository;
+pub use traits::ProjectRepositoryTrait;

@@ -45,8 +45,6 @@ impl IntoResponse for AppError {
                 DatabaseError::SqlxError(sqlx::Error::RowNotFound) => {
                     (StatusCode::NOT_FOUND, format!("Record not found: {err}")).into_response()
                 }
-                DatabaseError::NotFound(msg) => (StatusCode::NOT_FOUND, format!("Resource not found: {msg}")).into_response(),
-                DatabaseError::ValidationError(msg) => (StatusCode::BAD_REQUEST, format!("Validation error: {msg}")).into_response(),
                 _ => (StatusCode::INTERNAL_SERVER_ERROR, format!("Repository error: {err}")).into_response(),
             },
             AppError::RedisError(err) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Redis error: {err}")).into_response(),

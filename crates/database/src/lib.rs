@@ -7,9 +7,9 @@ pub mod error;
 pub mod models;
 pub mod repositories;
 
-pub use connection::*;
+pub use connection::{initialize_database, DatabasePool};
 pub use error::DatabaseError;
-pub use models::project::*;
+pub use models::project::{ProjectCreate, ProjectInfo, ProjectSearchResult, ProjectUpdate};
 pub use repositories::{project::ProjectRepository, traits::ProjectRepositoryTrait};
 
 /// 数据库操作结果类型
