@@ -21,6 +21,7 @@ redis = { workspace = true }
 color-eyre = { workspace = true }
 validator = { workspace = true }
 thiserror = { workspace = true }
+async-trait = { workspace = true }
 
 # Web服务特有的依赖
 utoipa = { version = "5.3.0", features = ["axum_extras", "openapi_extensions", "time"] }

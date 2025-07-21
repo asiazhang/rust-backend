@@ -2,14 +2,14 @@
 //!
 //! 负责项目相关的数据库操作
 
+use crate::DatabaseResult;
 use crate::models::project::{ProjectCreate, ProjectInfo, ProjectSearchResult, ProjectUpdate};
 use crate::repositories::traits::ProjectRepositoryTrait;
-use crate::DatabaseResult;
 use sqlx::PgPool;
 use tracing::debug;
 
 /// 项目仓库结构体
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ProjectRepository {
     pool: PgPool,
 }
