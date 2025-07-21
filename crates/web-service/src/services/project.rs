@@ -2,22 +2,31 @@
 //!
 //! 提供项目相关的业务逻辑操作
 
-use database::{ProjectRepositoryTrait, ProjectInfo, ProjectCreate, ProjectUpdate, ProjectSearchResult, DatabaseResult};
 use crate::services::traits::ProjectServiceTrait;
+use database::{DatabaseResult, ProjectCreate, ProjectInfo, ProjectRepositoryTrait, ProjectSearchResult, ProjectUpdate};
 
 #[derive(Debug, Clone)]
-pub struct ProjectService<PR: ProjectRepositoryTrait> {
+pub struct ProjectService<PR>
+where
+    PR: ProjectRepositoryTrait,
+{
     project_repository: PR,
 }
 
-impl<PR: ProjectRepositoryTrait> ProjectService<PR> {
+impl<PR> ProjectService<PR>
+where
+    PR: ProjectRepositoryTrait,
+{
     pub fn new(project_repository: PR) -> Self {
         Self { project_repository }
     }
 }
 
 #[async_trait::async_trait]
-impl<PR: ProjectRepositoryTrait> ProjectServiceTrait for ProjectService<PR> {
+impl<PR> ProjectServiceTrait for ProjectService<PR>
+where
+    PR: ProjectRepositoryTrait,
+{
     async fn find_projects(&self, name: Option<String>, page_size: i64, offset: i64) -> DatabaseResult<ProjectSearchResult> {
         self.project_repository.find_projects(name, page_size, offset).await
     }
