@@ -9,6 +9,10 @@
 //!
 //! 所有代码都放在一个程序中，方便部署和维护(适用于小型系统)
 
+// 🚀 使用mimalloc作为全局内存分配器，提升内存分配性能
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 use color_eyre::eyre::Context;
 use color_eyre::Result;
 use consumer_service::start_job_consumers;
