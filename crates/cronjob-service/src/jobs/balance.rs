@@ -20,7 +20,7 @@ use color_eyre::Result;
 use chrono::Utc;
 use redis::aio::ConnectionManager;
 use redis::{AsyncCommands, RedisResult, Value};
-use redis::{ExistenceCheck, SetExpiry, SetOptions};
+use shared_lib::execute_with_lock;
 use shared_lib::models::redis_constants::{
     BATCH_SIZE, CONSUMER_GROUP_NAME, CONSUMER_HEARTBEAT_KEY, HEARTBEAT_TIMEOUT_SECONDS, LOCK_TTL_SECONDS, REBALANCE_LOCK_KEY,
 };
@@ -58,46 +58,33 @@ pub async fn execute_rebalance_once(conn: &mut ConnectionManager) -> Result<()> 
 // 注意：心跳写入功能已在 src/tasks/mod.rs 的 consumer_task_send_heartbeat 函数中实现
 // 这里不需要重复实现心跳写入功能
 
-/// 尝试获取分布式锁
-async fn acquire_rebalance_lock(conn: &mut ConnectionManager) -> RedisResult<bool> {
-    let result: Option<String> = conn
-        .set_options(
-            REBALANCE_LOCK_KEY,
-            "locked",
-            SetOptions::default()
-                .conditional_set(ExistenceCheck::NX)
-                .get(true)
-                .with_expiration(SetExpiry::EX(LOCK_TTL_SECONDS)),
-        )
-        .await?;
-    Ok(result.is_some())
-}
-
-/// 释放分布式锁
-async fn release_rebalance_lock(conn: &mut ConnectionManager) -> RedisResult<()> {
-    let _: i32 = conn.del(REBALANCE_LOCK_KEY).await?;
-    Ok(())
-}
-
 /// 执行重平衡（带分布式锁）
 async fn rebalance_with_retry(conn: &mut ConnectionManager) -> Result<()> {
-    // 尝试获取分布式锁
-    if !acquire_rebalance_lock(conn).await.unwrap_or(false) {
-        debug!("🔒 其他重平衡任务正在运行，跳过本次执行");
-        return Ok(());
+    let conn_clone = conn.clone();
+    match execute_with_lock(
+        conn,
+        REBALANCE_LOCK_KEY,
+        std::time::Duration::from_secs(LOCK_TTL_SECONDS),
+        async move {
+            let mut conn = conn_clone;
+            rebalance(&mut conn).await
+        },
+    )
+    .await
+    {
+        Ok(Some(_)) => {
+            debug!("🔓 成功获取重平衡锁并完成重平衡");
+            Ok(())
+        }
+        Ok(None) => {
+            debug!("🔒 其他重平衡任务正在运行，跳过本次执行");
+            Ok(())
+        }
+        Err(e) => {
+            error!("❌ 重平衡任务执行失败: {}", e);
+            Err(e.into())
+        }
     }
-
-    debug!("🔓 成功获取重平衡锁");
-
-    // 执行重平衡逻辑
-    let rebalance_result = rebalance(conn).await.map_err(|e| color_eyre::eyre::eyre!("重平衡执行失败: {}", e));
-
-    // 无论成功还是失败，都要释放锁
-    if let Err(e) = release_rebalance_lock(conn).await {
-        warn!("⚠️ 释放重平衡锁失败: {}", e);
-    }
-
-    rebalance_result
 }
 
 /// 重平衡逻辑
@@ -259,7 +246,7 @@ async fn get_pending_messages(conn: &mut ConnectionManager, stream: &str, group:
     Ok(message_ids)
 }
 
-/// 批量重新分发消息到活跃的消费者（优化版本）
+/// 批量重新分发消息到活跃的消费者
 async fn redistribute_messages_batch(
     conn: &mut ConnectionManager,
     stream: &str,
@@ -306,15 +293,11 @@ async fn redistribute_messages_batch(
                         target_consumer
                     );
                 } else {
-                    warn!("⚠️ 消息批次重新分配失败，尝试逐条处理");
-                    // 如果批量失败，尝试逐条处理
-                    redistributed_count += redistribute_messages_individually(conn, stream, group, chunk, &consumer_names).await?;
+                    warn!("⚠️ 消息批次重新分配失败，跳过此批次");
                 }
             }
             Err(e) => {
-                warn!("⚠️ 批量claim失败: {}，尝试逐条处理", e);
-                // 如果批量失败，尝试逐条处理
-                redistributed_count += redistribute_messages_individually(conn, stream, group, chunk, &consumer_names).await?;
+                warn!("⚠️ 批量claim失败: {}，跳过此批次", e);
             }
         }
     }
@@ -322,37 +305,6 @@ async fn redistribute_messages_batch(
     Ok(redistributed_count)
 }
 
-/// 逐条重新分发消息（当批量失败时的备用方案）
-async fn redistribute_messages_individually(
-    conn: &mut ConnectionManager,
-    stream: &str,
-    group: &str,
-    message_ids: &[String],
-    consumer_names: &[&str],
-) -> RedisResult<u64> {
-    let mut redistributed_count = 0;
-
-    for (msg_idx, message_id) in message_ids.iter().enumerate() {
-        if let Some(&target_consumer) = consumer_names.get(msg_idx % consumer_names.len()) {
-            match conn.xclaim(stream, group, target_consumer, 0, &[message_id]).await {
-                Ok(Value::Array(ref arr)) if !arr.is_empty() => {
-                    redistributed_count += 1;
-                    debug!("📤 消息 {} 已重新分配给消费者 {}", message_id, target_consumer);
-                }
-                Ok(_) => {
-                    warn!("⚠️ 消息 {} 重新分配失败", message_id);
-                }
-                Err(e) => {
-                    warn!("⚠️ 消息 {} claim失败: {}", message_id, e);
-                }
-            }
-        } else {
-            error!("❌ 没有可用的活跃消费者来接收消息 {}", message_id);
-        }
-    }
-
-    Ok(redistributed_count)
-}
 
 /// 删除消费者状态记录
 async fn remove_consumer_status(conn: &mut ConnectionManager, consumer_name: &str) -> RedisResult<()> {

@@ -17,6 +17,10 @@ validator = { workspace = true }
 color-eyre = { workspace = true }
 dotenvy = { workspace = true }
 
+# 异步和日志
+tokio = { workspace = true }
+tracing = { workspace = true }
+
 # 数据库和缓存
 sqlx = { workspace = true }
 redis = { workspace = true }
