@@ -18,7 +18,7 @@ pub struct PageQuery {
 
 /// 封装符合json-api的单个返回对象
 ///
-/// 具体参考：https://jsonapi.org
+/// 具体参考：<https://jsonapi.org>
 #[derive(Deserialize, Debug, ToSchema, Serialize)]
 pub struct Reply<T> {
     pub data: T,

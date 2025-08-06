@@ -45,7 +45,7 @@ impl ProjectRepositoryTrait for ProjectRepository {
     ///
     /// # 错误处理
     ///
-    /// 如果数据库操作失败，会返回 [`DatabaseError`]
+    /// 如果数据库操作失败，会返回 [`crate::DatabaseError`]
     async fn find_projects(&self, project_name: Option<String>, page_size: i64, offset: i64) -> DatabaseResult<ProjectSearchResult> {
         debug!(
             "🔍 搜索项目 - 名称: {:?}, 页面大小: {}, 偏移量: {}",

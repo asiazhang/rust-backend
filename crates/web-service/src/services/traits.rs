@@ -8,7 +8,7 @@ use database::{DatabaseResult, ProjectInfo, ProjectCreate, ProjectUpdate, Projec
 ///
 /// 定义了项目相关的业务逻辑接口，作为应用层的端口(Port)
 /// 
-/// 该 trait 作为业务逻辑的抽象接口，具体实现由 [`ProjectService`] 提供
+/// 该 trait 作为业务逻辑的抽象接口，具体实现由 [`crate::services::project::ProjectService`] 提供
 #[async_trait::async_trait]
 pub trait ProjectServiceTrait: Send + Sync + Clone + 'static {
     /// 根据查询参数搜索项目

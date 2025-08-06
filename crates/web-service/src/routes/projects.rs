@@ -36,7 +36,7 @@ use validator::Validate;
 /// 返回值的类型是 [`Result<Json<ReplyList<ProjectInfo>>, AppError>`]。
 /// 在1.0.124其内部封装了以下几个关键：
 ///
-/// 1. [`Result`] 使用 [`anyhow::Result`] 对返回结果进行封装，方便使用 `?` 进行错误传播
+/// 1. [`Result`] 使用 `color_eyre::Result` 对返回结果进行封装，方便使用 `?` 进行错误传播
 /// 2. [`Json`] 会对内部类型进行json序列化，保证返回的数据是一个合法的json字符串
 /// 3. [`ReplyList`] 是我们封装的一个类型，表明结果是一个通用的`api-json`格式列表对象
 /// 4. [`ProjectInfo`] 是实际的业务返回对象

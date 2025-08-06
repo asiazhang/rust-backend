@@ -29,7 +29,7 @@ use tracing::{info, warn};
 ///
 /// ## 通用处理
 ///
-/// 代码中的[`guard_start_create_task_consumers`]是一个通用redis处理器，封装了相关逻辑，用户仅需要创建一个
+/// 代码中的内部函数 `guard_start_create_task_consumers` 是一个通用redis处理器，封装了相关逻辑，用户仅需要创建一个
 /// 实现了[`RedisHandlerTrait`]特征的处理器，传递给通用处理器即可。
 ///
 /// 主要核心处理函数在handler，这是一个实现了[`crate::traits::RedisHandlerTrait`] 特征的处理器。
