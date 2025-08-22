@@ -247,12 +247,12 @@ docker build -t rust-backend .
 
 ### 环境配置
 
-生产环境建议使用以下配置：
+本地开发环境配置示例：
 
 ```env
-RUST_LOG=info
-DATABASE_URL=postgresql://user:pass@prod-db:5432/rust_backend
-REDIS_URL=redis://prod-redis:6379
+RUST_LOG=debug
+DATABASE_URL=postgresql://username:password@localhost:5432/rust_backend
+REDIS_URL=redis://localhost:6379
 APP_PORT=8080
 ```
 
