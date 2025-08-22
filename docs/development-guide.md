@@ -245,16 +245,6 @@ cargo build --release
 docker build -t rust-backend .
 ```
 
-### 环境配置
-
-本地开发环境配置示例：
-
-```env
-RUST_LOG=debug
-DATABASE_URL=postgresql://username:password@localhost:5432/rust_backend
-REDIS_URL=redis://localhost:6379
-APP_PORT=8080
-```
 
 ### 监控和日志
 
