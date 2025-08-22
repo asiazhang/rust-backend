@@ -13,8 +13,8 @@
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-use color_eyre::eyre::Context;
 use color_eyre::Result;
+use color_eyre::eyre::Context;
 use consumer_service::start_job_consumers;
 use cronjob_service::start_cron_tasks;
 use database::initialize_database;

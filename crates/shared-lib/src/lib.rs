@@ -10,11 +10,19 @@ pub mod models;
 
 // 重新导出常用类型
 pub use models::{
-    AppConfig, RedisConfig, RedisConsumerHeartBeat, TaskInfo,
+    AppConfig,
     // Redis 常量
-    BATCH_SIZE, CONSUMER_GROUP_NAME, CONSUMER_HEARTBEAT_KEY, HEARTBEAT_INTERVAL_SECONDS,
-    HEARTBEAT_TIMEOUT_SECONDS, LOCK_TTL_SECONDS, REBALANCE_LOCK_KEY,
+    BATCH_SIZE,
+    CONSUMER_GROUP_NAME,
+    CONSUMER_HEARTBEAT_KEY,
+    HEARTBEAT_INTERVAL_SECONDS,
+    HEARTBEAT_TIMEOUT_SECONDS,
+    LOCK_TTL_SECONDS,
+    REBALANCE_LOCK_KEY,
+    RedisConfig,
+    RedisConsumerHeartBeat,
+    TaskInfo,
 };
 
 // 重新导出分布式锁功能
-pub use distributed_lock::{execute_with_lock, DistributedLock, LockGuard};
+pub use distributed_lock::{DistributedLock, LockGuard, execute_with_lock};

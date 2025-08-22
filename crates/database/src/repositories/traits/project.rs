@@ -2,8 +2,8 @@
 //!
 //! 定义项目数据库操作的抽象接口
 
-use crate::models::project::{ProjectCreate, ProjectInfo, ProjectSearchResult, ProjectUpdate};
 use crate::DatabaseResult;
+use crate::models::project::{ProjectCreate, ProjectInfo, ProjectSearchResult, ProjectUpdate};
 
 /// 项目仓库trait定义
 ///

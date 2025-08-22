@@ -16,8 +16,8 @@
 //!     - 如果心跳正常，则什么也不做
 //!
 
-use color_eyre::Result;
 use chrono::Utc;
+use color_eyre::Result;
 use redis::aio::ConnectionManager;
 use redis::{AsyncCommands, RedisResult, Value};
 use shared_lib::execute_with_lock;
@@ -304,7 +304,6 @@ async fn redistribute_messages_batch(
 
     Ok(redistributed_count)
 }
-
 
 /// 删除消费者状态记录
 async fn remove_consumer_status(conn: &mut ConnectionManager, consumer_name: &str) -> RedisResult<()> {

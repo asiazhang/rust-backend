@@ -7,7 +7,7 @@ pub mod error;
 pub mod models;
 pub mod repositories;
 
-pub use connection::{initialize_database, DatabasePool};
+pub use connection::{DatabasePool, initialize_database};
 pub use error::DatabaseError;
 pub use models::project::{ProjectCreate, ProjectInfo, ProjectSearchResult, ProjectUpdate};
 pub use repositories::{project::ProjectRepository, traits::ProjectRepositoryTrait};

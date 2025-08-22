@@ -14,7 +14,6 @@ pub enum DatabaseError {
     /// 迁移错误
     #[error("数据库迁移错误: {0}")]
     MigrationError(String),
-
 }
 
 impl DatabaseError {
@@ -27,5 +26,4 @@ impl DatabaseError {
     pub fn migration<T: ToString>(msg: T) -> Self {
         Self::MigrationError(msg.to_string())
     }
-
 }

@@ -19,15 +19,11 @@ pub struct DistributedLock {
 impl DistributedLock {
     /// 创建新的分布式锁管理器
     pub fn new(conn: ConnectionManager, lock_key: String, lock_ttl: Duration) -> Self {
-        Self {
-            conn,
-            lock_key,
-            lock_ttl,
-        }
+        Self { conn, lock_key, lock_ttl }
     }
 
     /// 尝试获取锁
-    /// 
+    ///
     /// 返回 `LockGuard` 如果成功获取锁，否则返回 `None`
     pub async fn try_acquire(&mut self) -> Result<Option<LockGuard>, redis::RedisError> {
         let result: Option<String> = self
@@ -48,8 +44,7 @@ impl DistributedLock {
             Ok(None)
         }
     }
-
-  }
+}
 
 /// 锁守卫，使用RAII模式自动释放锁
 pub struct LockGuard {
@@ -69,7 +64,7 @@ impl Drop for LockGuard {
         // 注意：这可能会失败，但我们无法在Drop中处理错误
         let conn = self.conn.clone();
         let lock_key = self.lock_key.clone();
-        
+
         // 使用spawn而不是block_on，避免阻塞当前线程
         tokio::spawn(async move {
             let mut conn = conn;
@@ -81,13 +76,13 @@ impl Drop for LockGuard {
 }
 
 /// 便捷函数：执行带锁的操作
-/// 
+///
 /// # 参数
 /// - `conn`: Redis连接管理器
 /// - `lock_key`: 锁的键名
 /// - `lock_ttl`: 锁的过期时间
 /// - `operation`: 需要在锁保护下执行的操作
-/// 
+///
 /// # 返回值
 /// 返回操作的结果，如果获取锁失败则返回 `None`
 pub async fn execute_with_lock<T, F>(
@@ -100,7 +95,7 @@ where
     F: std::future::Future<Output = T>,
 {
     let mut lock_manager = DistributedLock::new(conn.clone(), lock_key.to_string(), lock_ttl);
-    
+
     match lock_manager.try_acquire().await? {
         Some(_guard) => {
             // 锁获取成功，执行操作
@@ -113,5 +108,3 @@ where
         }
     }
 }
-
-
