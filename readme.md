@@ -18,10 +18,11 @@
 
 ### 环境要求
 
-- **Rust**: 1.70+ (推荐使用最新稳定版)
-- **PostgreSQL**: 13+
-- **Redis**: 6+
-- **Docker**: 用于本地开发环境
+- **Rust**: 1.83+ (推荐使用最新稳定版)
+- **PostgreSQL**: 17+ (推荐使用最新稳定版)
+- **Redis**: 7.4+ (推荐使用最新稳定版)
+- **Docker**: 27.0+ (用于本地开发环境)
+- **Docker Compose**: 2.29+ (用于本地开发环境)
 
 ### 开发环境搭建
 
@@ -138,70 +139,6 @@
 - **[架构流程图](docs/mermaid_final.md)** - 完整的系统架构可视化图表
 - **[技术选型 FAQ](docs/faq.md)** - 为什么选择这些技术栈的详细说明
 
-## 🚀 快速开始
-
-### 环境要求
-
-- **Rust**: 1.70+ (推荐使用最新稳定版)
-- **PostgreSQL**: 13+
-- **Redis**: 6+
-- **Docker**: 用于本地开发环境
-
-### 开发环境搭建
-
-1. **克隆项目**
-   ```bash
-   git clone <repository-url>
-   cd rust-backend
-   ```
-
-2. **启动依赖服务**
-   ```bash
-   cd db_helper && docker compose up -d
-   cd ..
-   ```
-
-3. **安装数据库工具**
-   ```bash
-   cargo install sqlx-cli
-   ```
-
-4. **初始化数据库**
-   ```bash
-   sqlx database create
-   sqlx migrate run
-   ```
-
-5. **配置环境变量**
-   ```bash
-   cp .env.example .env  # 如果有模板文件
-   # 编辑 .env 文件配置数据库和Redis连接
-   ```
-
-6. **启动项目**
-   ```bash
-   cargo run
-   ```
-
-### 验证安装
-
-- 🌐 **Web API**: http://localhost:8080
-- 📖 **API文档**: http://localhost:8080/swagger-ui/
-- 🗄️ **数据库**: localhost:5432
-- 📨 **Redis**: localhost:6379
-
-### 🔗 技术资源
-
-#### 核心框架
-- [Axum 官方文档](https://docs.rs/axum/latest/axum/)
-- [Tokio 官方文档](https://tokio.rs/docs)
-- [SQLx 文档](https://github.com/launchbadge/sqlx)
-- [Redis 文档](https://redis.io/documentation)
-
-#### 开发工具
-- [Rust 官方文档](https://doc.rust-lang.org/)
-- [Cargo 使用指南](https://doc.rust-lang.org/cargo/)
-- [OpenAPI 规范](https://swagger.io/specification/)
 
 ### 🤝 贡献指南
 

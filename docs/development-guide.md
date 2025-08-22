@@ -270,19 +270,6 @@ APP_PORT=8080
 - **[架构流程图](../mermaid_final.md)** - 完整的系统架构可视化图表
 - **[技术选型 FAQ](../faq.md)** - 为什么选择这些技术栈的详细说明
 
-### 🔗 技术资源
-
-#### 核心框架
-- [Axum 官方文档](https://docs.rs/axum/latest/axum/)
-- [Tokio 官方文档](https://tokio.rs/docs)
-- [SQLx 文档](https://github.com/launchbadge/sqlx)
-- [Redis 文档](https://redis.io/documentation)
-
-#### 开发工具
-- [Rust 官方文档](https://doc.rust-lang.org/)
-- [Cargo 使用指南](https://doc.rust-lang.org/cargo/)
-- [OpenAPI 规范](https://swagger.io/specification/)
-
 ---
 
 *🎯 本文档为 Rust 后端项目的完整开发指南，涵盖了从环境搭建到生产部署的全流程。*
