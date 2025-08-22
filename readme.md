@@ -342,40 +342,6 @@ APP_PORT=8080
 - `POST /api/users` - 创建用户
 - `GET /api/users/{id}` - 获取用户详情
 
-### 使用示例
-
-#### cURL 示例
-```bash
-# 获取项目列表
-curl -X GET "http://localhost:8080/api/projects" \
-     -H "accept: application/json"
-
-# 创建新项目
-curl -X POST "http://localhost:8080/api/projects" \
-     -H "accept: application/json" \
-     -H "Content-Type: application/json" \
-     -d '{"name":"新项目","description":"项目描述"}'
-```
-
-#### JavaScript 示例
-```javascript
-// 获取项目列表
-const response = await fetch('http://localhost:8080/api/projects');
-const projects = await response.json();
-
-// 创建项目
-const newProject = await fetch('http://localhost:8080/api/projects', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    name: '新项目',
-    description: '项目描述'
-  })
-});
-```
-
 ## 📚 相关文档
 
 ### 📋 详细文档
