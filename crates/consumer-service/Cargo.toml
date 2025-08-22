@@ -19,7 +19,7 @@ tracing = { workspace = true }
 color-eyre = { workspace = true }
 futures = { workspace = true }
 redis = { workspace = true }
-time = { workspace = true }
+chrono = { workspace = true }
 async-trait = { workspace = true }
 
 # 内部依赖

@@ -10,6 +10,7 @@
 //! 该模块的核心功能是从 Redis 流中读取消息，并通过实现了 `RedisHandlerTrait` 的处理器来处理这些消息。
 
 use crate::traits::RedisHandlerTrait;
+use chrono::Utc;
 use color_eyre::Result;
 use color_eyre::eyre::Context;
 use futures::StreamExt;
@@ -21,7 +22,6 @@ use shared_lib::models::redis_constants::{CONSUMER_GROUP_NAME, CONSUMER_HEARTBEA
 use shared_lib::models::redis_task::RedisConsumerHeartBeat;
 use std::sync::Arc;
 use std::time::Duration;
-use time::OffsetDateTime;
 use tokio::sync::watch::Receiver;
 use tokio::try_join;
 use tracing::{debug, error, trace, warn};
@@ -390,7 +390,7 @@ async fn consumer_task_send_heartbeat<T: RedisHandlerTrait>(
                 let redis_heartbeat = RedisConsumerHeartBeat {
                     stream_name: redis_task.stream_name().to_string(),
                     consumer_name: consumer_name.clone(),
-                    last_heartbeat: OffsetDateTime::now_utc().unix_timestamp(),
+                    last_heartbeat: Utc::now().timestamp(),
                 };
 
                 if let Ok(json_data) = serde_json::to_string(&redis_heartbeat) {

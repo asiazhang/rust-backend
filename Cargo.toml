@@ -55,6 +55,5 @@ dotenvy = "0.15.7"
 async-trait = "0.1.83"
 color-eyre = "0.6.3"
 futures = "0.3.31"
-time = "0.3.37"
 rand = "0.8"
 validator = { version = "0.20.0", features = ["derive"] }
