@@ -59,11 +59,11 @@ tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 axum = { version = "0.8.1", features = ["macros"] }
 sqlx = { version = "0.8.2", features = ["macros", "migrate", "postgres", "runtime-tokio"] }
-redis = { version = "0.31", features = ["connection-manager", "tokio-comp"] }
+redis = { version = "1.0", features = ["connection-manager", "tokio-comp"] }
 chrono = { version = "0.4", features = ["serde"] }
 dotenvy = "0.15.7"
 async-trait = "0.1.83"
 color-eyre = "0.6.3"
 futures = "0.3.31"
-rand = "0.8"
+rand = "0.10"
 validator = { version = "0.20.0", features = ["derive"] }
