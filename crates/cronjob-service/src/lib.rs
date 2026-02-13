@@ -1,3 +1,7 @@
+//! 定时任务服务模块
+//!
+//! 这个模块提供了定时任务调度的功能。
+
 use color_eyre::Result;
 use shared_lib::models::config::AppConfig;
 use std::sync::Arc;

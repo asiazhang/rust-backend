@@ -3,6 +3,7 @@
 //! 提供 HTTP API 接口和文档服务
 
 use color_eyre::Result;
+use color_eyre::eyre::Context;
 use sqlx::{Pool, Postgres};
 use std::sync::Arc;
 use tokio::sync::watch::Receiver;
@@ -38,8 +39,9 @@ pub async fn start_web_service(pool: Pool<Postgres>, mut shutdown_rx: Receiver<b
 
     axum::serve(listener, router.into_make_service())
         .with_graceful_shutdown(async move {
-            shutdown_rx.changed().await.expect("Failed to receive shutdown signal");
+            shutdown_rx.changed().await.context("Failed to receive shutdown signal")?;
             info!("🛑 Web Service 正在关闭...");
+            Ok::<_, color_eyre::Report>(())
         })
         .await?;
 

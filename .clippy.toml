@@ -1,0 +1,14 @@
+# Clippy 配置文件
+# 禁止使用 unwrap 和 unsafe
+
+# 禁止的 lints 列表
+avoid-breaking-exported-api = true
+
+# 认知复杂度阈值
+cognitive-complexity-threshold = 25
+
+# 文档要求
+missing-docs-in-crate-items = false
+
+# 类型复杂度阈值
+type-complexity-threshold = 250

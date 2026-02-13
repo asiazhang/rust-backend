@@ -6,6 +6,9 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lints]
+workspace = true
+
 [lib]
 name = "consumer_service"
 path = "src/lib.rs"
